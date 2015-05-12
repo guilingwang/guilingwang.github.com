@@ -1,0 +1,157 @@
+<html>
+<head>
+    <title>服务计算研究领域大牛</title>
+	
+	<meta http-equiv="Content-Type" content="text/html; charset=GBK"/>
+
+    <link href="SOCVIPlists.js" type="application/json" rel="exhibit/data" />
+    
+    <script src="http://static.simile.mit.edu/exhibit/api-2.0/exhibit-api.js" type="text/javascript"></script>
+    <script src="http://static.simile.mit.edu/exhibit/extensions-2.0/time/time-extension.js" type="text/javascript"></script>
+	
+    <style>
+        body {
+            font-family:    Tahoma, Arial, sans serif;
+            font-size:      8pt;
+            margin:         0;
+            padding:        0;
+            background:     #BCB79E;
+        }
+        table { font-size: 100%; }
+        tr { vertical-align: top; }
+        
+        #content { background: white; width: 80em; }
+        #title-panel { padding: 0.25in 0.5in; }
+        #top-panels {
+            padding:        0.5em 0.5in;
+            border-top:     1px solid #BCB79E;
+            border-bottom:  1px solid #BCB79E;
+            background:     #FBF4D3;
+        }
+        
+        .exhibit-tileView-body { list-style: none; }
+        .exhibit-collectionView-group-count { display: none; }
+        
+        table.soaviplist {
+            border:     1px solid #ddd;
+            padding:    0.5em;
+        }
+        div.name {
+            font-weight: bold;
+            font-size:   120%;
+        }
+        .relationship {
+            color:  #888;
+        }
+        
+        div.nobelist-thumbnail {
+            float:      left;
+            width:      13em;
+            height:     10em;
+            border:     1px solid #BCB79E;
+            background: #F0FFF0;
+            padding:    1em;
+            margin:     0.5em;
+            text-align: center;
+        }
+        div.nobelist-timeline-lens {
+            padding:    1em;
+            text-align: center;
+        }
+    </style>
+  
+</head> 
+<body>
+
+<div id="content">
+    <div id="title-panel">
+        <h1>SOC Very Important Person(服务计算研究领域的大牛)</h1>
+        <p>The information within this page is collected from WWW. If you have some recommendation, please email to me(wangguiling (#) ict.ac.cn). Thank you very much! Currently, this Webpage displays correctly in Firefox or Chrome but not in IE. 
+        </p>
+    </div>
+    
+    <div id="top-panels">
+        <table width="100%"><tr>
+            <td><div ex:role="facet" ex:expression=".affilation" ex:facetLabel="所在大学或研究所"></div></td>
+            <td><div ex:role="facet" ex:expression=".country" ex:facetLabel="所在国家"></div></td>
+            <td><div ex:role="facet" ex:expression=".origin-field" ex:facetLabel="出道研究领域"></div></td>
+            <td><div ex:role="facet" ex:expression=".lab" ex:facetLabel="所在实验室"></div></td>			
+        </tr></table>
+    </div>
+	
+    <div ex:role="viewPanel" style="padding: 1em 0.5in;">
+        <table ex:role="lens" class="soaviplist" style="display: none;"><tr>
+            <td>
+                <div class="name">
+				  <a ex:href-content=".homepage"><span ex:content=".label"></span></a></div>
+				  
+                 <div ex:if-exists=".briefdesc" class="briefdesc">
+                     <span ex:content=".briefdesc"></span>
+				 </div>
+				 <div>
+                    <span ex:content=".affilation" class="affliation"></span>, 
+                    <i ex:if-exists=".enterdate" class="enterdate">
+					  <b>Enter the affilation from</b> <span ex:content=".enterdate"></span></i>
+                </div>
+				
+				<div ex:if-exists=".interests" class="interests">
+                     <b>Research Interests:</b> <span ex:content=".interests"></span>
+				 </div>              
+				
+				<div>				   
+					<b>Email:</b> <span ex:content=".email" class="email"></span>					
+				</div>
+				
+				<div class="imageurl">
+				<a ex:href-content=".imageurl">photo</a> </div>
+				
+				<div ex:if-exists=".detaildescurl" class="detaildescurl">
+				 <a  ex:href-content=".detaildescurl">
+                     See More...</a>
+				 </div>
+				 
+				 
+                
+            </td>
+        </tr></table>
+        
+        <div ex:role="view"
+            ex:viewClass="Thumbnail"
+            ex:showAll="true"
+            ex:orders=".country"
+            ex:possibleOrders=".country, .lab, .origin-field" >
+            <div ex:role="exhibit-lens" class="nobelist-thumbnail" style="display: none;">
+                <div class="name">
+				  <a ex:href-content=".homepage"><span ex:content=".label"></span></a></div>				                 
+				
+				<div ex:if-exists=".email" class="email">				   
+					Email: <span ex:content=".email" class="email"></span>					
+				</div>
+				
+				<div ex:if-exists=".lab" class="lab">
+                     <a ex:href-content=".teamUrl"><span ex:content=".lab"></span></a>
+				</div>
+				
+				<div class="imageurl">
+				<a ex:href-content=".imageurl">photo</a> </div>
+				
+				<div ex:if-exists=".detaildescurl" class="detaildescurl">
+				 <a  ex:href-content=".detaildescurl">
+                     See More...</a>
+				 </div>
+              
+            </div>
+        </div>
+		
+		<div ex:role="view"
+            ex:label="Details"
+            ex:viewClass="Tile"
+            ex:showAll="true"
+            ex:orders=".country, .lab"
+            ex:possibleOrders=".label, .country, .lab, .origin-field">
+        </div>
+       
+    </div>
+</div>
+</body>
+</html>
