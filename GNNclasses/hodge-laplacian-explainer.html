@@ -1,0 +1,1592 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>单纯复形与 Hodge 拉普拉斯矩阵完全解析</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Noto+Serif+SC:wght@400;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'Noto Serif SC', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        primary: { 50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe', 300: '#93c5fd', 400: '#60a5fa', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8', 800: '#1e40af', 900: '#1e3a8a' },
+                        accent: { 50: '#fdf4ff', 100: '#fae8ff', 200: '#f5d0fe', 300: '#f0abfc', 400: '#e879f9', 500: '#d946ef', 600: '#c026d3', 700: '#a21caf', 800: '#86198f', 900: '#701a75' },
+                        warm: { 50: '#fffbeb', 100: '#fef3c7', 200: '#fde68a', 300: '#fcd34d', 400: '#fbbf24', 500: '#f59e0b', 600: '#d97706', 700: '#b45309', 800: '#92400e', 900: '#78350f' },
+                        teal: { 50: '#f0fdfa', 100: '#ccfbf1', 200: '#99f6e4', 300: '#5eead4', 400: '#2dd4bf', 500: '#14b8a6', 600: '#0d9488', 700: '#0f766e', 800: '#115e59', 900: '#134e4a' },
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Inter', 'Noto Serif SC', sans-serif; background: #0f172a; color: #e2e8f0; }
+        .gradient-text { background: linear-gradient(135deg, #60a5fa 0%, #c084fc 50%, #f472b6 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+        .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(148, 163, 184, 0.1); }
+        .node-circle { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .node-circle:hover { filter: brightness(1.3); transform: scale(1.2); }
+        .edge-line { transition: all 0.3s ease; }
+        .triangle-shape { transition: all 0.3s ease; }
+        .step-card { transition: all 0.3s ease; border-left: 3px solid transparent; }
+        .step-card.active { border-left-color: #60a5fa; background: rgba(96, 165, 250, 0.05); }
+        .matrix-cell { transition: all 0.2s ease; font-variant-numeric: tabular-nums; }
+        .matrix-cell:hover { background: rgba(96, 165, 250, 0.3) !important; transform: scale(1.1); }
+        .tab-btn { transition: all 0.2s ease; }
+        .tab-btn.active { background: rgba(96, 165, 250, 0.15); color: #60a5fa; border-color: #60a5fa; }
+        .scroll-indicator { position: fixed; top: 0; left: 0; height: 3px; background: linear-gradient(90deg, #60a5fa, #c084fc, #f472b6); z-index: 100; transition: width 0.1s; }
+        .eigen-bar { transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+        .input-slider { -webkit-appearance: none; appearance: none; height: 6px; border-radius: 3px; background: #334155; outline: none; }
+        .input-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #60a5fa; cursor: pointer; border: 2px solid #1e293b; }
+        .code-section pre { margin: 0; border-radius: 0.75rem; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+        details > summary { list-style: none; }
+        details > summary::-webkit-details-marker { display: none; }
+        .math-inline { font-family: 'JetBrains Mono', monospace; }
+    </style>
+</head>
+<body class="min-h-screen">
+    <div class="scroll-indicator" id="scrollBar"></div>
+
+    <!-- Hero Section -->
+    <section class="relative min-h-[70vh] flex items-center justify-center overflow-hidden">
+        <div class="absolute inset-0 opacity-20">
+            <svg width="100%" height="100%">
+                <defs>
+                    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                        <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(96,165,250,0.1)" stroke-width="0.5"/>
+                    </pattern>
+                </defs>
+                <rect width="100%" height="100%" fill="url(#grid)"/>
+            </svg>
+        </div>
+        <div class="relative z-10 text-center px-4 max-w-5xl mx-auto">
+            <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary-900/50 border border-primary-700/30 text-primary-300 text-sm mb-6">
+                <span class="w-2 h-2 rounded-full bg-primary-400 animate-pulse"></span>
+                代数拓扑 · Hodge 理论 · 拓扑数据分析 (TDA)
+            </div>
+            <h1 class="text-5xl md:text-7xl font-bold mb-6 leading-tight">
+                <span class="gradient-text">单纯复形</span>
+                <br>
+                <span class="text-slate-300 text-3xl md:text-4xl font-medium">与 Hodge 拉普拉斯矩阵</span>
+            </h1>
+            <p class="text-xl text-slate-400 max-w-2xl mx-auto leading-relaxed mb-8">
+                从三角形到高维结构，从边界算子到谱分解。<br class="hidden md:block">
+                一个页面彻底弄懂拓扑与谱的深层联系。
+            </p>
+            <div class="flex flex-wrap justify-center gap-3 text-sm">
+                <span class="px-3 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700 text-slate-300">单纯复形</span>
+                <span class="px-3 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700 text-slate-300">边界算子 ∂</span>
+                <span class="px-3 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700 text-slate-300">Hodge 拉普拉斯 Lₖ</span>
+                <span class="px-3 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700 text-slate-300">Betti 数</span>
+                <span class="px-3 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700 text-slate-300">Hodge 分解</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- Section 1: Core Idea -->
+    <section class="max-w-6xl mx-auto px-4 py-16">
+        <div class="mb-4">
+            <span class="text-primary-400 font-mono text-sm">01 / CORE IDEA</span>
+        </div>
+        <h2 class="text-3xl font-bold mb-8 text-white">一句话理解核心概念</h2>
+
+        <div class="glass rounded-2xl p-8 mb-10">
+            <div class="text-xl leading-relaxed text-slate-200 mb-6">
+                <span class="text-primary-400 font-semibold">Hodge 拉普拉斯的核心：</span>它将图上的拉普拉斯算子推广到<span class="bg-primary-900/40 px-2 py-0.5 rounded text-primary-300">高维单纯复形</span>，通过边界算子捕捉<span class="bg-accent-900/40 px-2 py-0.5 rounded text-accent-300">k 维洞</span>的拓扑信息，其<span class="bg-warm-900/40 px-2 py-0.5 rounded text-warm-300">零特征值的重数</span>就是 Betti 数。
+            </div>
+            <div class="grid md:grid-cols-3 gap-4">
+                <div class="bg-slate-800/50 rounded-xl p-5 border border-slate-700/50">
+                    <div class="text-teal-400 font-mono text-lg mb-2">0 阶 L₀</div>
+                    <p class="text-slate-400 text-sm">标准图拉普拉斯。<code class="text-teal-300">L₀ = B₁B₁ᵀ</code>。零特征值个数 = 连通分量数 β₀。</p>
+                </div>
+                <div class="bg-slate-800/50 rounded-xl p-5 border border-slate-700/50">
+                    <div class="text-primary-400 font-mono text-lg mb-2">1 阶 L₁</div>
+                    <p class="text-slate-400 text-sm">边拉普拉斯。<code class="text-primary-300">L₁ = B₁ᵀB₁ + B₂B₂ᵀ</code>。零特征值个数 = 一维洞数 β₁（环）。</p>
+                </div>
+                <div class="bg-slate-800/50 rounded-xl p-5 border border-slate-700/50">
+                    <div class="text-accent-400 font-mono text-lg mb-2">2 阶 L₂</div>
+                    <p class="text-slate-400 text-sm">面拉普拉斯。<code class="text-accent-300">L₂ = B₂ᵀB₂</code>。零特征值个数 = 二维洞数 β₂（空腔）。</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Section 2: Interactive Simplicial Complex -->
+    <section class="max-w-6xl mx-auto px-4 py-16">
+        <div class="mb-4">
+            <span class="text-primary-400 font-mono text-sm">02 / SIMPLICIAL COMPLEX</span>
+        </div>
+        <h2 class="text-3xl font-bold mb-4 text-white">交互式单纯复形构建</h2>
+        <p class="text-slate-400 mb-8">在下方定义顶点、边和三角形，右侧实时计算所有矩阵和谱信息。</p>
+
+        <div class="grid lg:grid-cols-2 gap-6">
+            <!-- Input Panel -->
+            <div class="space-y-4">
+                <div class="glass rounded-2xl p-6">
+                    <h3 class="font-semibold text-lg text-slate-200 mb-4 flex items-center gap-2">
+                        <span class="w-6 h-6 rounded bg-warm-500/20 text-warm-400 text-xs flex items-center justify-center">IN</span>
+                        定义单纯复形
+                    </h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="text-xs text-slate-400 block mb-1">顶点（位置可拖动）</label>
+                            <div class="grid grid-cols-4 gap-2" id="vertexInputs"></div>
+                        </div>
+                        <div>
+                            <label class="text-xs text-slate-400 block mb-1">边 (i,j) — 1-单形</label>
+                            <textarea id="edgeInput" rows="3" class="w-full px-3 py-2 text-sm bg-slate-900 border border-slate-700 rounded-lg font-mono text-slate-300 focus:border-primary-500 focus:outline-none resize-none" placeholder="每行一条边，如: 0 1"></textarea>
+                            <div class="text-xs text-slate-500 mt-1">格式：两个整数顶点编号，空格分隔</div>
+                        </div>
+                        <div>
+                            <label class="text-xs text-slate-400 block mb-1">三角形 (i,j,k) — 2-单形</label>
+                            <textarea id="triangleInput" rows="3" class="w-full px-3 py-2 text-sm bg-slate-900 border border-slate-700 rounded-lg font-mono text-slate-300 focus:border-primary-500 focus:outline-none resize-none" placeholder="每行一个三角形，如: 0 1 2"></textarea>
+                            <div class="text-xs text-slate-500 mt-1">格式：三个整数顶点编号（按逆时针方向定向）</div>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="loadExample('triangle')" class="flex-1 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs text-slate-300 transition-colors">三角形</button>
+                            <button onclick="loadExample('square')" class="flex-1 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs text-slate-300 transition-colors">带洞正方形</button>
+                            <button onclick="loadExample('tetrahedron')" class="flex-1 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs text-slate-300 transition-colors">四面体</button>
+                            <button onclick="loadExample('complex')" class="flex-1 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs text-slate-300 transition-colors">复合结构</button>
+                        </div>
+                        <button onclick="computeAll()" class="w-full py-2.5 rounded-lg bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium transition-colors">
+                            计算所有矩阵与谱
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Visualization Panel -->
+            <div class="glass rounded-2xl p-6">
+                <h3 class="font-semibold text-lg text-slate-200 mb-4 flex items-center gap-2">
+                    <span class="w-6 h-6 rounded bg-primary-500/20 text-primary-400 text-xs flex items-center justify-center">→</span>
+                    可视化
+                </h3>
+                <div class="relative" style="min-height: 360px;">
+                    <svg id="simplicialSvg" width="100%" height="360" viewBox="0 0 400 360" class="bg-slate-900/30 rounded-xl">
+                        <defs>
+                            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                                <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8"/>
+                            </marker>
+                        </defs>
+                    </svg>
+                    <div class="absolute top-3 right-3 flex gap-2">
+                        <span class="px-2 py-1 rounded bg-slate-800/80 text-xs text-slate-400 border border-slate-700">
+                            <span class="inline-block w-2 h-2 rounded-full bg-primary-400 mr-1"></span>顶点
+                        </span>
+                        <span class="px-2 py-1 rounded bg-slate-800/80 text-xs text-slate-400 border border-slate-700">
+                            <span class="inline-block w-2 h-2 rounded-full bg-warm-400 mr-1"></span>边
+                        </span>
+                        <span class="px-2 py-1 rounded bg-slate-800/80 text-xs text-slate-400 border border-slate-700">
+                            <span class="inline-block w-2 h-2 rounded-full bg-accent-400/50 mr-1"></span>三角形
+                        </span>
+                    </div>
+                </div>
+                <div class="mt-4 grid grid-cols-3 gap-3 text-center">
+                    <div class="bg-slate-800/50 rounded-lg p-3">
+                        <div class="text-xs text-slate-500">0-单形</div>
+                        <div class="text-xl font-bold text-teal-400" id="countV">0</div>
+                    </div>
+                    <div class="bg-slate-800/50 rounded-lg p-3">
+                        <div class="text-xs text-slate-500">1-单形</div>
+                        <div class="text-xl font-bold text-primary-400" id="countE">0</div>
+                    </div>
+                    <div class="bg-slate-800/50 rounded-lg p-3">
+                        <div class="text-xs text-slate-500">2-单形</div>
+                        <div class="text-xl font-bold text-accent-400" id="countT">0</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Section 3: Boundary Matrices -->
+    <section class="max-w-6xl mx-auto px-4 py-16">
+        <div class="mb-4">
+            <span class="text-primary-400 font-mono text-sm">03 / BOUNDARY OPERATORS</span>
+        </div>
+        <h2 class="text-3xl font-bold mb-8 text-white">边界算子与关联矩阵</h2>
+
+        <div class="space-y-6">
+            <!-- Step 1 -->
+            <div class="step-card glass rounded-xl p-6 cursor-pointer" onclick="highlightStep(0)">
+                <div class="flex items-start gap-4">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-teal-900/50 border border-teal-700/30 flex items-center justify-center text-teal-400 font-bold">1</div>
+                    <div class="flex-1">
+                        <h3 class="font-semibold text-lg text-slate-200 mb-2">边界算子 ∂<sub>k</sub>：从 k-单形到 (k-1)-单形</h3>
+                        <p class="text-slate-400 text-sm mb-3">
+                            边界算子描述一个高维单形的"边界"由哪些低维单形组成。<strong class="text-slate-300">定向</strong>至关重要：边的方向决定符号，三角形的定向（顺时针/逆时针）决定各边的符号。
+                        </p>
+                        <div class="grid md:grid-cols-2 gap-4">
+                            <div class="bg-slate-900/80 rounded-lg p-4">
+                                <div class="text-xs text-warm-400 mb-2 font-semibold">∂₁：边的边界</div>
+                                <div class="font-mono text-center text-sm">
+                                    ∂₁[vᵢ, vⱼ] = [vⱼ] − [vᵢ]
+                                </div>
+                                <div class="text-xs text-slate-500 mt-2">
+                                    有向边 [i→j] 的边界是终点 j 减起点 i。这对应 B₁ 矩阵中 +1 和 −1。
+                                </div>
+                            </div>
+                            <div class="bg-slate-900/80 rounded-lg p-4">
+                                <div class="text-xs text-accent-400 mb-2 font-semibold">∂₂：三角形的边界</div>
+                                <div class="font-mono text-center text-sm">
+                                    ∂₂[i,j,k] = [j,k] − [i,k] + [i,j]
+                                </div>
+                                <div class="text-xs text-slate-500 mt-2">
+                                    定向三角形的三条边按定向循环取正负。若边方向与循环方向一致则为正。
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- B1 Matrix -->
+            <div class="glass rounded-2xl p-6">
+                <h3 class="font-semibold text-lg text-slate-200 mb-4">关联矩阵 B₁（顶点 × 边）</h3>
+                <p class="text-slate-400 text-sm mb-4">
+                    B₁[v,e] = +1 如果顶点 v 是有向边 e 的终点；−1 如果是起点；0 如果不关联。
+                </p>
+                <div id="B1Matrix" class="overflow-x-auto">
+                    <div class="text-slate-500 text-center py-8">请先定义边，然后点击"计算所有矩阵与谱"</div>
+                </div>
+            </div>
+
+            <!-- B2 Matrix -->
+            <div class="glass rounded-2xl p-6">
+                <h3 class="font-semibold text-lg text-slate-200 mb-4">关联矩阵 B₂（边 × 三角形）</h3>
+                <p class="text-slate-400 text-sm mb-4">
+                    B₂[e,t] = +1 如果边 e 的方向与三角形 t 的定向一致；−1 如果相反；0 如果不属于三角形。
+                </p>
+                <div id="B2Matrix" class="overflow-x-auto">
+                    <div class="text-slate-500 text-center py-8">请先定义三角形，然后点击"计算所有矩阵与谱"</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Section 4: Hodge Laplacian -->
+    <section class="max-w-6xl mx-auto px-4 py-16">
+        <div class="mb-4">
+            <span class="text-primary-400 font-mono text-sm">04 / HODGE LAPLACIAN</span>
+        </div>
+        <h2 class="text-3xl font-bold mb-8 text-white">Hodge 拉普拉斯矩阵</h2>
+
+        <div class="glass rounded-2xl p-6 mb-8">
+            <div class="text-xl font-mono text-center text-slate-200 mb-6">
+                L<sub>k</sub> = B<sub>k</sub><sup>T</sup>B<sub>k</sub> + B<sub>k+1</sub>B<sub>k+1</sub><sup>T</sup>
+            </div>
+            <div class="grid md:grid-cols-3 gap-4 text-sm">
+                <div class="bg-slate-900/50 rounded-lg p-4 border border-teal-700/30">
+                    <div class="text-teal-400 font-semibold mb-2">L₀ = B₁B₁ᵀ</div>
+                    <p class="text-slate-400">标准图拉普拉斯。L₀[i,j] = deg(i) if i=j, −1 if (i,j)∈E, 0 otherwise。</p>
+                </div>
+                <div class="bg-slate-900/50 rounded-lg p-4 border border-primary-700/30">
+                    <div class="text-primary-400 font-semibold mb-2">L₁ = B₁ᵀB₁ + B₂B₂ᵀ</div>
+                    <p class="text-slate-400">边拉普拉斯。B₁ᵀB₁ 是边上的"顶点梯度项"，B₂B₂ᵀ 是边上的"三角形旋度项"。</p>
+                </div>
+                <div class="bg-slate-900/50 rounded-lg p-4 border border-accent-700/30">
+                    <div class="text-accent-400 font-semibold mb-2">L₂ = B₂ᵀB₂</div>
+                    <p class="text-slate-400">面拉普拉斯。衡量三角形在三维结构中的"弯曲"程度。</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="space-y-6">
+            <div class="glass rounded-2xl p-6">
+                <h3 class="font-semibold text-lg text-slate-200 mb-4">L₀ 矩阵（顶点拉普拉斯）</h3>
+                <div id="L0Matrix" class="overflow-x-auto"></div>
+            </div>
+            <div class="glass rounded-2xl p-6">
+                <h3 class="font-semibold text-lg text-slate-200 mb-4">L₁ 矩阵（边拉普拉斯 — 最重要！）</h3>
+                <div id="L1Matrix" class="overflow-x-auto"></div>
+            </div>
+            <div class="glass rounded-2xl p-6">
+                <h3 class="font-semibold text-lg text-slate-200 mb-4">L₂ 矩阵（面拉普拉斯）</h3>
+                <div id="L2Matrix" class="overflow-x-auto"></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Section 5: Spectrum and Betti Numbers -->
+    <section class="max-w-6xl mx-auto px-4 py-16">
+        <div class="mb-4">
+            <span class="text-primary-400 font-mono text-sm">05 / SPECTRUM & BETTI</span>
+        </div>
+        <h2 class="text-3xl font-bold mb-8 text-white">谱分解与 Betti 数</h2>
+
+        <div class="glass rounded-2xl p-6 mb-8">
+            <div class="text-lg text-slate-200 mb-4 text-center">
+                <strong class="text-primary-400">核心定理：</strong>Betti 数 β<sub>k</sub> = dim(ker L<sub>k</sub>) = L<sub>k</sub> 的零特征值重数
+            </div>
+            <p class="text-slate-400 text-sm text-center">
+                这意味着：对拉普拉斯矩阵做特征值分解，特征值为 0 的个数直接告诉你这个复形有多少个 k 维洞！
+            </p>
+        </div>
+
+        <div class="grid lg:grid-cols-3 gap-6">
+            <div class="glass rounded-2xl p-6">
+                <h3 class="font-semibold text-teal-400 mb-4">L₀ 谱 — β₀（连通分量）</h3>
+                <div id="spectrumL0" class="space-y-2"></div>
+                <div class="mt-4 pt-4 border-t border-slate-700">
+                    <div class="flex justify-between items-center">
+                        <span class="text-slate-400 text-sm">β₀ = </span>
+                        <span class="text-2xl font-bold text-teal-400" id="beta0">?</span>
+                    </div>
+                </div>
+            </div>
+            <div class="glass rounded-2xl p-6">
+                <h3 class="font-semibold text-primary-400 mb-4">L₁ 谱 — β₁（一维洞 / 环）</h3>
+                <div id="spectrumL1" class="space-y-2"></div>
+                <div class="mt-4 pt-4 border-t border-slate-700">
+                    <div class="flex justify-between items-center">
+                        <span class="text-slate-400 text-sm">β₁ = </span>
+                        <span class="text-2xl font-bold text-primary-400" id="beta1">?</span>
+                    </div>
+                </div>
+            </div>
+            <div class="glass rounded-2xl p-6">
+                <h3 class="font-semibold text-accent-400 mb-4">L₂ 谱 — β₂（二维洞 / 空腔）</h3>
+                <div id="spectrumL2" class="space-y-2"></div>
+                <div class="mt-4 pt-4 border-t border-slate-700">
+                    <div class="flex justify-between items-center">
+                        <span class="text-slate-400 text-sm">β₂ = </span>
+                        <span class="text-2xl font-bold text-accent-400" id="beta2">?</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Euler Characteristic -->
+        <div class="glass rounded-2xl p-6 mt-6">
+            <h3 class="font-semibold text-lg text-slate-200 mb-4">欧拉示性数验证</h3>
+            <div class="text-center text-lg font-mono text-slate-200">
+                χ = n₀ − n₁ + n₂ = <span id="chiLeft" class="text-warm-400">?</span>
+                <span class="mx-3 text-slate-500">=</span>
+                β₀ − β₁ + β₂ = <span id="chiRight" class="text-warm-400">?</span>
+            </div>
+            <div class="text-center text-sm text-slate-500 mt-2" id="chiVerify"></div>
+        </div>
+    </section>
+
+    <!-- Section 6: Hodge Decomposition -->
+    <section class="max-w-6xl mx-auto px-4 py-16">
+        <div class="mb-4">
+            <span class="text-primary-400 font-mono text-sm">06 / HODGE DECOMPOSITION</span>
+        </div>
+        <h2 class="text-3xl font-bold mb-8 text-white">Hodge 分解：边上的三种流</h2>
+
+        <div class="glass rounded-2xl p-8 mb-8">
+            <div class="text-center mb-6">
+                <div class="text-xl font-mono text-slate-200">
+                    C<sub>k</sub> = im(B<sub>k</sub><sup>T</sup>) ⊕ im(B<sub>k+1</sub>) ⊕ ker(L<sub>k</sub>)
+                </div>
+            </div>
+            <div class="grid md:grid-cols-3 gap-4">
+                <div class="bg-slate-900/50 rounded-xl p-5 border border-teal-700/30">
+                    <div class="text-teal-400 font-semibold mb-2">梯度流 Gradient</div>
+                    <div class="font-mono text-xs text-slate-400 mb-2">im(B₁ᵀ) — 来自顶点势函数</div>
+                    <p class="text-slate-400 text-sm">可表示为顶点值的差分。例如：电势差驱动的电流。无旋（curl-free）。</p>
+                </div>
+                <div class="bg-slate-900/50 rounded-xl p-5 border border-primary-700/30">
+                    <div class="text-primary-400 font-semibold mb-2">旋度流 Curl</div>
+                    <div class="font-mono text-xs text-slate-400 mb-2">im(B₂) — 来自三角形面</div>
+                    <p class="text-slate-400 text-sm">沿每个三角形的循环流动。例如：涡旋流。无散（divergence-free）。</p>
+                </div>
+                <div class="bg-slate-900/50 rounded-xl p-5 border border-warm-700/30">
+                    <div class="text-warm-400 font-semibold mb-2">调和流 Harmonic</div>
+                    <div class="font-mono text-xs text-slate-400 mb-2">ker(L₁) — L₁ 的零空间</div>
+                    <p class="text-slate-400 text-sm">既无散也无旋的流。对应拓扑洞中的"环绕流"。维数 = β₁。</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass rounded-2xl p-6">
+            <h3 class="font-semibold text-lg text-slate-200 mb-4">交互式 Hodge 分解</h3>
+            <p class="text-slate-400 text-sm mb-4">输入边上的流量值（边上的"信号"），分解为梯度分量、旋度分量和调和分量。</p>
+            <div class="grid lg:grid-cols-2 gap-6">
+                <div>
+                    <label class="text-xs text-slate-400 block mb-2">边上流量 f（按边的定义顺序）</label>
+                    <div id="flowInputs" class="space-y-2 mb-4"></div>
+                    <button onclick="decomposeFlow()" class="w-full py-2 rounded-lg bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium transition-colors">
+                        执行 Hodge 分解
+                    </button>
+                </div>
+                <div id="decompositionResult" class="space-y-3">
+                    <div class="text-slate-500 text-center py-8">输入流量后点击分解</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Section 7: Applications -->
+    <section class="max-w-6xl mx-auto px-4 py-16">
+        <div class="mb-4">
+            <span class="text-primary-400 font-mono text-sm">07 / APPLICATIONS</span>
+        </div>
+        <h2 class="text-3xl font-bold mb-8 text-white">Hodge 拉普拉斯的应用</h2>
+
+        <div class="grid md:grid-cols-2 gap-6">
+            <div class="glass rounded-2xl p-6">
+                <div class="text-primary-400 font-semibold mb-3">1. 网络流量分析与优化</div>
+                <p class="text-slate-400 text-sm mb-3">
+                    将交通/通信网络建模为单纯复形，边上的流量用 Hodge 分解拆分为：
+                </p>
+                <ul class="text-sm text-slate-400 space-y-1 list-disc list-inside">
+                    <li><strong class="text-teal-300">梯度分量</strong>：由拥堵差异驱动的流，可用势函数优化</li>
+                    <li><strong class="text-primary-300">旋度分量</strong>：循环绕路导致的低效流量，需要移除</li>
+                    <li><strong class="text-warm-300">调和分量</strong>：拓扑结构固有的绕行，无法通过局部调整消除</li>
+                </ul>
+            </div>
+            <div class="glass rounded-2xl p-6">
+                <div class="text-accent-400 font-semibold mb-3">2. 协同过滤与推荐系统</div>
+                <p class="text-slate-400 text-sm mb-3">
+                    在 item co-occurrence 单纯复形上，HodgeRank 方法利用 L₁ 的谱信息：
+                </p>
+                <ul class="text-sm text-slate-400 space-y-1 list-disc list-inside">
+                    <li>用户偏好建模为边上的"比较流"</li>
+                    <li>不一致性 = 旋度分量的能量（curl energy）</li>
+                    <li>投影到梯度分量得到全局一致的排序</li>
+                </ul>
+            </div>
+            <div class="glass rounded-2xl p-6">
+                <div class="text-teal-400 font-semibold mb-3">3. 拓扑数据分析 (TDA)</div>
+                <p class="text-slate-400 text-sm mb-3">
+                    持续同调（Persistent Homology）用 Hodge 拉普拉斯加速：
+                </p>
+                <ul class="text-sm text-slate-400 space-y-1 list-disc list-inside">
+                    <li>比标准持续同调算法快数个数量级</li>
+                    <li>L₁ 的谱隙（最小非零特征值）反映洞的"稳定性"</li>
+                    <li>用于材料科学、神经科学中的形状分析</li>
+                </ul>
+            </div>
+            <div class="glass rounded-2xl p-6">
+                <div class="text-warm-400 font-semibold mb-3">4. 图神经网络的推广</div>
+                <p class="text-slate-400 text-sm mb-3">
+                    Simplicial Networks 将 GNN 推广到单纯复形：
+                </p>
+                <ul class="text-sm text-slate-400 space-y-1 list-disc list-inside">
+                    <li>消息传递不仅沿边（0→1），还沿三角形（1→2）</li>
+                    <li>利用 B₁, B₂ 定义邻域卷积</li>
+                    <li>比图神经网络更好地捕捉高阶交互</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <!-- Section 8: Core Code -->
+    <section class="max-w-6xl mx-auto px-4 py-16">
+        <div class="mb-4">
+            <span class="text-primary-400 font-mono text-sm">08 / CODE</span>
+        </div>
+        <h2 class="text-3xl font-bold mb-8 text-white">核心代码（纯 NumPy 实现）</h2>
+
+        <div class="glass rounded-2xl overflow-hidden">
+            <div class="flex border-b border-slate-700">
+                <button class="tab-btn active px-6 py-3 text-sm font-medium border-b-2 border-transparent" onclick="switchTab('build', this)">构建拉普拉斯</button>
+                <button class="tab-btn px-6 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400" onclick="switchTab('decomp', this)">Hodge 分解</button>
+                <button class="tab-btn px-6 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400" onclick="switchTab('viz', this)">可视化</button>
+            </div>
+
+            <div id="code-build" class="code-section p-0">
+                <pre><code class="language-python">import numpy as np
+from scipy.linalg import eigh
+from itertools import combinations
+
+class SimplicialComplex:
+    """
+    单纯复形与 Hodge 拉普拉斯的完整实现
+
+    一个单纯复形 K 由以下部分组成：
+      - K_0: 0-单形集合（顶点）
+      - K_1: 1-单形集合（有向边）
+      - K_2: 2-单形集合（定向三角形）
+    """
+
+    def __init__(self, n_vertices, edges, triangles=None):
+        """
+        Args:
+            n_vertices: 顶点数
+            edges:      边的列表，每条边为 (i, j) 元组，表示有向边 i→j
+            triangles:  三角形的列表，每个为 (i, j, k) 元组
+                        定向：i→j→k→i（逆时针为正定向）
+        """
+        self.n_vertices = n_vertices
+        self.edges = list(edges)
+        self.triangles = list(triangles) if triangles else []
+
+        # 构建关联矩阵
+        self.B1 = self._build_B1()   # |V| × |E|
+        self.B2 = self._build_B2()   # |E| × |T|
+
+        # 构建 Hodge 拉普拉斯
+        self.L0 = self._build_L0()   # 顶点拉普拉斯
+        self.L1 = self._build_L1()   # 边拉普拉斯（核心）
+        self.L2 = self._build_L2()   # 面拉普拉斯
+
+    def _build_B1(self):
+        """
+        构建边界矩阵 B₁: 顶点 × 边
+
+        B₁[v, e] =  +1  如果顶点 v 是边 e 的终点（箭头指向 v）
+                    -1  如果顶点 v 是边 e 的起点（箭头离开 v）
+                     0  如果不关联
+
+        数学：∂₁[i→j] = [j] − [i]
+        """
+        nV, nE = self.n_vertices, len(self.edges)
+        B1 = np.zeros((nV, nE))
+
+        for e_idx, (i, j) in enumerate(self.edges):
+            B1[i, e_idx] = -1   # i 是起点
+            B1[j, e_idx] = +1   # j 是终点
+
+        return B1
+
+    def _build_B2(self):
+        """
+        构建边界矩阵 B₂: 边 × 三角形
+
+        对于定向三角形 (i, j, k)，其边界为：
+            ∂₂[i,j,k] = [j,k] − [i,k] + [i,j]
+
+        即三条边：
+            (j,k): 方向与定向一致 → +1
+            (i,k): 方向与定向相反（应为 k→i，但存的是 i→k）→ -1
+            (i,j): 方向与定向一致 → +1
+
+        注意：如果边的有向存储与三角形定向不一致，符号会相应变化。
+        """
+        nE, nT = len(self.edges), len(self.triangles)
+        B2 = np.zeros((nE, nT))
+
+        # 建立边到索引的映射（同时记录方向）
+        edge_to_idx = {}
+        for idx, (i, j) in enumerate(self.edges):
+            edge_to_idx[(i, j)] = (idx, +1)   # 存储方向：正向
+            edge_to_idx[(j, i)] = (idx, -1)   # 反向
+
+        for t_idx, (i, j, k) in enumerate(self.triangles):
+            # 三角形定向边：(i,j), (j,k), (k,i)
+            triangle_edges = [(i, j), (j, k), (k, i)]
+
+            for te in triangle_edges:
+                if te in edge_to_idx:
+                    e_idx, sign = edge_to_idx[te]
+                    # edge_to_idx 已包含方向匹配信息
+                    # 如果 te = (i,j) 且库存也是 (i,j) → sign=+1（一致）
+                    # 如果 te = (k,i) 但库存是 (i,k) → sign=-1（相反）
+                    B2[e_idx, t_idx] = sign
+
+        return B2
+
+    def _build_L0(self):
+        """
+        0 阶 Hodge 拉普拉斯：L₀ = B₁B₁ᵀ
+
+        这就是标准图拉普拉斯！
+        L₀[i,i] = 节点 i 的度（出边+入边）
+        L₀[i,j] = −1 如果 i 和 j 之间有边
+        """
+        return self.B1 @ self.B1.T
+
+    def _build_L1(self):
+        """
+        1 阶 Hodge 拉普拉斯：L₁ = B₁ᵀB₁ + B₂B₂ᵀ
+
+        这是 Hodge 理论的核心：
+          - B₁ᵀB₁: "顶点梯度项"，衡量边上的散度
+          - B₂B₂ᵀ: "三角形旋度项"，衡量边上的旋度
+
+        两项之和使得 L₁ 同时编码了上下两个尺度的拓扑信息。
+        """
+        term1 = self.B1.T @ self.B1          # |E| × |E|
+        term2 = self.B2 @ self.B2.T if self.B2.size > 0 else np.zeros((len(self.edges), len(self.edges)))
+        return term1 + term2
+
+    def _build_L2(self):
+        """
+        2 阶 Hodge 拉普拉斯：L₂ = B₂ᵀB₂
+        """
+        if self.B2.size == 0:
+            return np.zeros((len(self.triangles), len(self.triangles)))
+        return self.B2.T @ self.B2
+
+    def spectrum(self, k):
+        """
+        计算 L_k 的特征值和特征向量
+
+        Returns:
+            eigenvalues: 升序排列的特征值
+            eigenvectors: 对应的特征向量（列向量）
+        """
+        L = {0: self.L0, 1: self.L1, 2: self.L2}[k]
+        if L.size == 0:
+            return np.array([]), np.array([])
+        vals, vecs = eigh(L)  # eigh 用于对称矩阵，更稳定
+        return vals, vecs
+
+    def betti_numbers(self, tol=1e-10):
+        """
+        计算 Betti 数：零特征值的重数
+
+        β₀ = L₀ 的零特征值个数 = 连通分量数
+        β₁ = L₁ 的零特征值个数 = 一维洞（环）数
+        β₂ = L₂ 的零特征值个数 = 二维洞（空腔）数
+        """
+        betti = []
+        for k in [0, 1, 2]:
+            vals, _ = self.spectrum(k)
+            beta = np.sum(np.abs(vals) < tol)
+            betti.append(beta)
+        return betti
+
+    def hodge_decomposition(self, f):
+        """
+        对边上的信号 f 进行 Hodge 分解
+
+        f = grad(φ) + curl(w) + h
+
+        Args:
+            f: 长度为 |E| 的向量，边上的流量/信号
+
+        Returns:
+            f_grad: 梯度分量（在 im(B₁ᵀ) 中）
+            f_curl: 旋度分量（在 im(B₂) 中）
+            f_harm: 调和分量（在 ker(L₁) 中）
+        """
+        f = np.array(f)
+
+        # 1. 梯度分量：投影到 B₁ᵀ 的列空间
+        # f_grad = B₁ᵀ(B₁B₁ᵀ)⁺B₁f，其中 ⁺ 表示伪逆
+        B1 = self.B1
+        B2 = self.B2
+
+        # 投影到 im(B₁ᵀ)
+        if B1.shape[0] > 0:
+            L0_pinv = np.linalg.pinv(B1 @ B1.T)
+            phi = L0_pinv @ B1 @ f        # 顶点势函数
+            f_grad = B1.T @ phi            # 梯度流
+        else:
+            f_grad = np.zeros_like(f)
+
+        # 2. 旋度分量：投影到 B₂ 的列空间
+        if B2.size > 0 and B2.shape[1] > 0:
+            L2_pinv = np.linalg.pinv(B2.T @ B2)
+            w = L2_pinv @ B2.T @ f         # 面旋度势
+            f_curl = B2 @ w                # 旋度流
+        else:
+            f_curl = np.zeros_like(f)
+
+        # 3. 调和分量：正交补
+        f_harm = f - f_grad - f_curl
+
+        # 验证正交性（可选）
+        # assert np.allclose(f_grad @ f_curl, 0)
+        # assert np.allclose(f_grad @ f_harm, 0)
+        # assert np.allclose(f_curl @ f_harm, 0)
+
+        return f_grad, f_curl, f_harm
+
+
+# ==================== 使用示例 ====================
+if __name__ == "__main__":
+    # 示例：带洞的正方形
+    # 顶点：0,1,2,3（正方形四个角）
+    # 边：正方形边界 + 一条对角线
+    # 三角形：只填一个三角形，留下一个洞
+    n_vertices = 4
+    edges = [
+        (0, 1),  # 上边
+        (1, 2),  # 右边
+        (2, 3),  # 下边
+        (3, 0),  # 左边
+        (0, 2),  # 对角线
+    ]
+    triangles = [
+        (0, 1, 2),  # 右上三角形（填满）
+        # (0, 2, 3)  # 左下三角形（故意不填，形成一个洞）
+    ]
+
+    sc = SimplicialComplex(n_vertices, edges, triangles)
+
+    print("=" * 60)
+    print("B₁ 矩阵（顶点 × 边）:")
+    print(sc.B1)
+    print("\nB₂ 矩阵（边 × 三角形）:")
+    print(sc.B2)
+
+    print("\nL₀ 矩阵（顶点拉普拉斯）:")
+    print(sc.L0)
+    print("\nL₁ 矩阵（边拉普拉斯）:")
+    print(sc.L1)
+    print("\nL₂ 矩阵（面拉普拉斯）:")
+    print(sc.L2)
+
+    # 谱分解
+    print("\n" + "=" * 60)
+    for k in [0, 1, 2]:
+        vals, vecs = sc.spectrum(k)
+        print(f"\nL_{k} 的特征值: {np.round(vals, 4)}")
+
+    # Betti 数
+    beta0, beta1, beta2 = sc.betti_numbers()
+    print(f"\nBetti 数: β₀={beta0}, β₁={beta1}, β₂={beta2}")
+    print(f"解释: {beta0} 个连通分量, {beta1} 个一维洞, {beta2} 个二维洞")
+
+    # Hodge 分解
+    f = np.array([1.0, 2.0, -1.0, 0.5, 1.5])  # 5 条边上的流量
+    f_grad, f_curl, f_harm = sc.hodge_decomposition(f)
+    print(f"\n流量分解:")
+    print(f"  原信号 f:     {np.round(f, 3)}")
+    print(f"  梯度分量:     {np.round(f_grad, 3)}")
+    print(f"  旋度分量:     {np.round(f_curl, 3)}")
+    print(f"  调和分量:     {np.round(f_harm, 3)}")
+    print(f"  重构误差:     {np.linalg.norm(f - f_grad - f_curl - f_harm):.2e}")
+</code></pre>
+            </div>
+
+            <div id="code-decomp" class="code-section p-0 hidden">
+                <pre><code class="language-python">import numpy as np
+
+def hodge_decomposition_dense(B1, B2, f, tol=1e-10):
+    """
+    对边上的信号 f 执行 Hodge 分解的纯 NumPy 实现
+
+    原理：利用投影算子将 f 分解到三个正交子空间
+
+      f = P_grad(f) + P_curl(f) + P_harm(f)
+
+    其中：
+      P_grad = B₁ᵀ(B₁B₁ᵀ)⁺B₁         投影到 im(B₁ᵀ)
+      P_curl = B₂(B₂ᵀB₂)⁺B₂ᵀ         投影到 im(B₂)
+      P_harm = I − P_grad − P_curl    投影到 ker(L₁)
+    """
+    f = np.asarray(f, dtype=float)
+    n_edges = len(f)
+
+    # ---- 梯度投影算子 ----
+    L0 = B1 @ B1.T                    # 顶点拉普拉斯
+    L0_pinv = np.linalg.pinv(L0)      # Moore-Penrose 伪逆
+    P_grad = B1.T @ L0_pinv @ B1      # |E| × |E| 投影矩阵
+
+    # ---- 旋度投影算子 ----
+    if B2.size > 0 and B2.shape[1] > 0:
+        L2t = B2.T @ B2               # B₂ᵀB₂
+        L2t_pinv = np.linalg.pinv(L2t)
+        P_curl = B2 @ L2t_pinv @ B2.T
+    else:
+        P_curl = np.zeros((n_edges, n_edges))
+
+    # ---- 调和投影算子 ----
+    I = np.eye(n_edges)
+    P_harm = I - P_grad - P_curl
+
+    # 执行投影
+    f_grad = P_grad @ f
+    f_curl = P_curl @ f
+    f_harm = P_harm @ f
+
+    # ---- 验证正交性 ----
+    print("正交性验证（内积应接近 0）:")
+    print(f"  ⟨grad, curl⟩ = {np.dot(f_grad, f_curl):.2e}")
+    print(f"  ⟨grad, harm⟩ = {np.dot(f_grad, f_harm):.2e}")
+    print(f"  ⟨curl, harm⟩ = {np.dot(f_curl, f_harm):.2e}")
+
+    # ---- 能量分解 ----
+    energy_total = np.dot(f, f)
+    energy_grad = np.dot(f_grad, f_grad)
+    energy_curl = np.dot(f_curl, f_curl)
+    energy_harm = np.dot(f_harm, f_harm)
+
+    print(f"\n能量分解:")
+    print(f"  总能量:       {energy_total:.4f}")
+    print(f"  梯度能量:     {energy_grad:.4f} ({100*energy_grad/energy_total:.1f}%)")
+    print(f"  旋度能量:     {energy_curl:.4f} ({100*energy_curl/energy_total:.1f}%)")
+    print(f"  调和能量:     {energy_harm:.4f} ({100*energy_harm/energy_total:.1f}%)")
+
+    return f_grad, f_curl, f_harm
+
+
+# 另一个视角：用特征向量分解
+
+def hodge_decomposition_spectral(L1, f):
+    """
+    谱分解视角的 Hodge 分解
+
+    对 L₁ 做特征值分解 L₁ = VΛVᵀ，
+    零特征值对应的特征向量张成调和子空间，
+    非零特征值对应的特征向量张成梯度+旋度子空间。
+    """
+    vals, vecs = np.linalg.eigh(L1)
+
+    # 分离零特征值和非零特征值
+    zero_mask = np.abs(vals) < 1e-10
+    n_zero = np.sum(zero_mask)
+
+    print(f"L₁ 零特征值个数: {n_zero} (= β₁)")
+
+    # 调和分量 = 投影到零特征空间
+    V_harm = vecs[:, zero_mask]       # |E| × β₁
+    f_harm = V_harm @ V_harm.T @ f
+
+    # 非调和分量
+    f_nonharm = f - f_harm
+
+    # 进一步拆分梯度/旋度需要 B₁ 和 B₂ 的信息
+    # 这里只展示谱分解与拓扑的直接联系
+
+    return f_harm, f_nonharm
+</code></pre>
+            </div>
+
+            <div id="code-viz" class="code-section p-0 hidden">
+                <pre><code class="language-python">import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.patches import Polygon
+from matplotlib.collections import LineCollection
+
+def visualize_simplicial_complex(vertices, edges, triangles=None,
+                                  edge_flow=None, title="Simplicial Complex"):
+    """
+    可视化单纯复形，可选显示边上的流量
+
+    Args:
+        vertices:    [[x0,y0], [x1,y1], ...] 顶点坐标
+        edges:       [(i,j), ...] 有向边
+        triangles:   [(i,j,k), ...] 定向三角形
+        edge_flow:   长度为 |E| 的向量，边上的流量值（用于着色）
+    """
+    fig, ax = plt.subplots(1, 1, figsize=(8, 8))
+
+    # 绘制三角形填充
+    if triangles:
+        for t in triangles:
+            pts = np.array([vertices[i] for i in t])
+            poly = Polygon(pts, alpha=0.2, facecolor='blue',
+                          edgecolor='none')
+            ax.add_patch(poly)
+
+    # 绘制边
+    segments = []
+    colors = []
+    for idx, (i, j) in enumerate(edges):
+        segments.append([vertices[i], vertices[j]])
+        if edge_flow is not None:
+            # 流量大小映射到颜色
+            val = edge_flow[idx]
+            colors.append(plt.cm.RdBu_r(0.5 + 0.5 * np.sign(val) *
+                          min(abs(val) / 2.0, 1.0)))
+        else:
+            colors.append('gray')
+
+    lc = LineCollection(segments, colors=colors, linewidths=2)
+    ax.add_collection(lc)
+
+    # 绘制顶点
+    xs, ys = zip(*vertices)
+    ax.scatter(xs, ys, c='white', s=200, zorder=5, edgecolors='black')
+    for i, (x, y) in enumerate(vertices):
+        ax.text(x, y, str(i), ha='center', va='center',
+               fontsize=12, fontweight='bold')
+
+    ax.set_aspect('equal')
+    ax.set_title(title)
+    ax.axis('off')
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_spectrum(vals, k, betti_k):
+    """绘制拉普拉斯谱，标注零特征值"""
+    fig, ax = plt.subplots(figsize=(8, 4))
+
+    # 排序特征值
+    vals_sorted = np.sort(vals)
+
+    # 绘制所有特征值
+    colors = ['red' if abs(v) < 1e-10 else 'blue' for v in vals_sorted]
+    ax.bar(range(len(vals_sorted)), vals_sorted, color=colors, alpha=0.7)
+
+    ax.axhline(y=0, color='black', linestyle='-', linewidth=0.5)
+    ax.set_xlabel('Index')
+    ax.set_ylabel('Eigenvalue')
+    ax.set_title(f'Spectrum of L_{k}: β_{k} = {betti_k} (red = zero)')
+
+    plt.tight_layout()
+    plt.show()
+
+
+# 示例：可视化带洞正方形及其流量分解
+if __name__ == "__main__":
+    vertices = np.array([
+        [0, 1],   # 0: 左上
+        [1, 1],   # 1: 右上
+        [1, 0],   # 2: 右下
+        [0, 0],   # 3: 左下
+    ])
+    edges = [(0,1), (1,2), (2,3), (3,0), (0,2)]
+    triangles = [(0, 1, 2)]  # 只填右上半
+
+    # 假设边上的流量
+    f = np.array([1.0, -0.5, 0.3, -0.8, 1.2])
+
+    visualize_simplicial_complex(vertices, edges, triangles, f,
+                                  "Flow on Simplicial Complex")
+</code></pre>
+            </div>
+        </div>
+    </section>
+
+    <!-- Section 9: FAQ -->
+    <section class="max-w-6xl mx-auto px-4 py-16">
+        <div class="mb-4">
+            <span class="text-primary-400 font-mono text-sm">09 / FAQ</span>
+        </div>
+        <h2 class="text-3xl font-bold mb-8 text-white">常见问题</h2>
+
+        <div class="space-y-4">
+            <details class="glass rounded-xl overflow-hidden group">
+                <summary class="px-6 py-4 cursor-pointer text-slate-200 font-medium flex items-center justify-between hover:bg-slate-800/50 transition-colors">
+                    <span>为什么 L₁ 比 L₀ 更重要？</span>
+                    <svg class="w-5 h-5 text-slate-500 transform group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </summary>
+                <div class="px-6 pb-4 text-slate-400 text-sm leading-relaxed">
+                    L₁ 是<strong class="text-slate-300">边拉普拉斯</strong>，它同时捕捉了两种拓扑信息：B₁ᵀB₁ 衡量边在顶点层面的"散度"（哪些边上的流汇聚或发散），B₂B₂ᵀ 衡量边在三角形层面的"旋度"（哪些边参与局部循环）。许多实际数据（如交通流、推荐系统中的成对比较）天然定义在边上而非顶点上，因此 L₁ 比 L₀ 更有建模能力。此外，L₁ 的零空间维数 β₁ 直接反映了一维洞的数量，这是标准图拉普拉斯无法提供的。
+                </div>
+            </details>
+            <details class="glass rounded-xl overflow-hidden group">
+                <summary class="px-6 py-4 cursor-pointer text-slate-200 font-medium flex items-center justify-between hover:bg-slate-800/50 transition-colors">
+                    <span>定向（Orientation）有什么影响？</span>
+                    <svg class="w-5 h-5 text-slate-500 transform group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </summary>
+                <div class="px-6 pb-4 text-slate-400 text-sm leading-relaxed">
+                    定向决定了关联矩阵中元素的<strong class="text-slate-300">正负号</strong>，进而影响特征向量的方向。然而，<strong class="text-slate-300">特征值本身与定向无关</strong>。这意味着 Betti 数、谱隙等拓扑不变量不依赖于你如何给边和三角形定向。实际计算中，只需选择一个一致的定向规则（如边的字典序定向、三角形的逆时针定向）即可。
+                </div>
+            </details>
+            <details class="glass rounded-xl overflow-hidden group">
+                <summary class="px-6 py-4 cursor-pointer text-slate-200 font-medium flex items-center justify-between hover:bg-slate-800/50 transition-colors">
+                    <span>Hodge 拉普拉斯和持续同调（Persistent Homology）有什么关系？</span>
+                    <svg class="w-5 h-5 text-slate-500 transform group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </summary>
+                <div class="px-6 pb-4 text-slate-400 text-sm leading-relaxed">
+                    两者都计算 Betti 数，但方法不同。<strong class="text-slate-300">持续同调</strong>通过不断增大连接阈值，追踪洞的"诞生"和"死亡"时间，得到持久性条形码。<strong class="text-slate-300">Hodge 拉普拉斯</strong>则直接对固定复形做谱分析，零特征值个数等于 Betti 数。近年来有研究将两者结合："持续谱"（Persistent Spectra）通过追踪特征值随阈值的变化来得到更丰富的拓扑信息。Hodge 拉普拉斯的优势是计算更快（矩阵分解而非条码计算），但持续同调能捕捉多尺度的拓扑演化。
+                </div>
+            </details>
+            <details class="glass rounded-xl overflow-hidden group">
+                <summary class="px-6 py-4 cursor-pointer text-slate-200 font-medium flex items-center justify-between hover:bg-slate-800/50 transition-colors">
+                    <span>如何从高维数据（如点云）构建单纯复形？</span>
+                    <svg class="w-5 h-5 text-slate-500 transform group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </summary>
+                <div class="px-6 pb-4 text-slate-400 text-sm leading-relaxed">
+                    最常用的方法是<strong class="text-slate-300">Vietoris-Rips 复形</strong>：给定点云和距离阈值 ε，当 k+1 个点两两距离都小于 ε 时，它们构成一个 k-单形。通过从小到大调整 ε，可以得到一个复形序列（filtration）。另一个常用方法是<strong class="text-slate-300">Čech 复形</strong>，要求 k+1 个点有公共交集。VR 复形更容易计算（只需要检查成对距离），而 Čech 复形有更好的理论保证（Nerve 定理）。在 TDA 中，通常先计算 VR 复形，再对其做持续同调或谱分析。
+                </div>
+            </details>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="max-w-6xl mx-auto px-4 py-12 text-center text-slate-600 text-sm border-t border-slate-800">
+        <p>参考: Hodge (1941), Eckmann (1944), Horak & Jost (2013), Lim (2020)</p>
+        <p class="mt-2">交互式 Hodge 拉普拉斯讲解页面</p>
+    </footer>
+
+    <script>
+        // ==================== State ====================
+        let vertices = [
+            {id: 0, x: 120, y: 80},
+            {id: 1, x: 280, y: 80},
+            {id: 2, x: 280, y: 240},
+            {id: 3, x: 120, y: 240},
+        ];
+        let edges = [[0,1], [1,2], [2,3], [3,0], [0,2]];
+        let triangles = [[0,1,2]];
+        let draggedVertex = null;
+
+        // ==================== Examples ====================
+        const examples = {
+            triangle: {
+                vertices: [{id:0, x:200, y:60}, {id:1, x:120, y:220}, {id:2, x:280, y:220}],
+                edges: [[0,1], [1,2], [2,0]],
+                triangles: [[0,1,2]]
+            },
+            square: {
+                vertices: [{id:0, x:120, y:80}, {id:1, x:280, y:80}, {id:2, x:280, y:240}, {id:3, x:120, y:240}],
+                edges: [[0,1], [1,2], [2,3], [3,0], [0,2]],
+                triangles: [[0,1,2]]
+            },
+            tetrahedron: {
+                vertices: [{id:0, x:200, y:50}, {id:1, x:100, y:180}, {id:2, x:300, y:180}, {id:3, x:200, y:290}],
+                edges: [[0,1], [0,2], [0,3], [1,2], [1,3], [2,3]],
+                triangles: [[0,1,2], [0,1,3], [0,2,3], [1,2,3]]
+            },
+            complex: {
+                vertices: [{id:0, x:100, y:100}, {id:1, x:200, y:60}, {id:2, x:300, y:100}, {id:3, x:200, y:180}, {id:4, x:200, y:280}],
+                edges: [[0,1], [1,2], [2,3], [3,0], [0,2], [1,3], [3,4]],
+                triangles: [[0,1,3], [1,2,3]]
+            }
+        };
+
+        function loadExample(name) {
+            const ex = examples[name];
+            vertices = ex.vertices.map(v => ({...v}));
+            edges = ex.edges.map(e => [...e]);
+            triangles = ex.triangles.map(t => [...t]);
+            updateInputsFromState();
+            renderVisualization();
+            renderVertexInputs();
+            computeAll();
+        }
+
+        // ==================== Input Management ====================
+        function updateInputsFromState() {
+            document.getElementById('edgeInput').value = edges.map(e => e.join(' ')).join('\n');
+            document.getElementById('triangleInput').value = triangles.map(t => t.join(' ')).join('\n');
+        }
+
+        function parseInputs() {
+            const edgeText = document.getElementById('edgeInput').value.trim();
+            edges = edgeText ? edgeText.split('\n').map(line => line.trim().split(/\s+/).map(Number).filter(x => !isNaN(x))).filter(e => e.length === 2) : [];
+
+            const triText = document.getElementById('triangleInput').value.trim();
+            triangles = triText ? triText.split('\n').map(line => line.trim().split(/\s+/).map(Number).filter(x => !isNaN(x))).filter(t => t.length === 3) : [];
+
+            // Ensure vertices exist
+            const allIds = new Set();
+            edges.forEach(e => { allIds.add(e[0]); allIds.add(e[1]); });
+            triangles.forEach(t => { allIds.add(t[0]); allIds.add(t[1]); allIds.add(t[2]); });
+            const maxId = allIds.size > 0 ? Math.max(...allIds) : -1;
+
+            // Keep existing vertices, add new ones if needed
+            while (vertices.length <= maxId) {
+                vertices.push({
+                    id: vertices.length,
+                    x: 100 + Math.random() * 200,
+                    y: 80 + Math.random() * 200
+                });
+            }
+            // Trim excess
+            if (vertices.length > maxId + 1 && maxId >= 0) {
+                vertices = vertices.slice(0, maxId + 1);
+            }
+
+            renderVertexInputs();
+            renderVisualization();
+        }
+
+        function renderVertexInputs() {
+            const container = document.getElementById('vertexInputs');
+            container.innerHTML = vertices.map((v, i) => `
+                <div class="bg-slate-900 rounded-lg p-2 border border-slate-700">
+                    <div class="text-xs text-teal-400 mb-1 text-center">v${i}</div>
+                    <div class="flex gap-1">
+                        <input type="number" value="${Math.round(v.x)}" class="w-full px-1 py-0.5 text-xs bg-slate-800 border border-slate-700 rounded text-center font-mono text-slate-300" onchange="updateVertexPos(${i}, 'x', this.value)">
+                        <input type="number" value="${Math.round(v.y)}" class="w-full px-1 py-0.5 text-xs bg-slate-800 border border-slate-700 rounded text-center font-mono text-slate-300" onchange="updateVertexPos(${i}, 'y', this.value)">
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateVertexPos(i, axis, val) {
+            vertices[i][axis] = Number(val);
+            renderVisualization();
+            computeAll();
+        }
+
+        // ==================== Visualization ====================
+        function renderVisualization() {
+            const svg = document.getElementById('simplicialSvg');
+            const vbW = 400, vbH = 360;
+
+            // Clear existing content except defs
+            const defs = svg.querySelector('defs');
+            svg.innerHTML = '';
+            if (defs) svg.appendChild(defs);
+
+            // Draw triangles
+            triangles.forEach((t, ti) => {
+                const pts = t.map(i => vertices[i]).filter(Boolean);
+                if (pts.length === 3) {
+                    const path = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+                    path.setAttribute('points', pts.map(p => `${p.x},${p.y}`).join(' '));
+                    path.setAttribute('fill', 'rgba(192, 132, 252, 0.15)');
+                    path.setAttribute('stroke', 'rgba(192, 132, 252, 0.4)');
+                    path.setAttribute('stroke-width', '1');
+                    path.classList.add('triangle-shape');
+                    svg.appendChild(path);
+                }
+            });
+
+            // Draw edges
+            edges.forEach((e, ei) => {
+                const u = vertices[e[0]], v = vertices[e[1]];
+                if (!u || !v) return;
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', u.x);
+                line.setAttribute('y1', u.y);
+                line.setAttribute('x2', v.x);
+                line.setAttribute('y2', v.y);
+                line.setAttribute('stroke', '#f59e0b');
+                line.setAttribute('stroke-width', '2.5');
+                line.setAttribute('opacity', '0.8');
+                line.classList.add('edge-line');
+                svg.appendChild(line);
+
+                // Arrowhead
+                const dx = v.x - u.x, dy = v.y - u.y;
+                const len = Math.sqrt(dx*dx + dy*dy);
+                if (len > 30) {
+                    const r = 24;
+                    const mx = u.x + dx * (1 - r/len);
+                    const my = u.y + dy * (1 - r/len);
+                    const arr = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+                    const angle = Math.atan2(dy, dx);
+                    const s = 6;
+                    const p1 = `${mx},${my}`;
+                    const p2 = `${mx - s*Math.cos(angle) + s*0.5*Math.sin(angle)},${my - s*Math.sin(angle) - s*0.5*Math.cos(angle)}`;
+                    const p3 = `${mx - s*Math.cos(angle) - s*0.5*Math.sin(angle)},${my - s*Math.sin(angle) + s*0.5*Math.cos(angle)}`;
+                    arr.setAttribute('points', `${p1} ${p2} ${p3}`);
+                    arr.setAttribute('fill', '#f59e0b');
+                    svg.appendChild(arr);
+                }
+            });
+
+            // Draw vertices
+            vertices.forEach((v, i) => {
+                const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                g.style.cursor = 'grab';
+                g.onmousedown = (e) => startDrag(e, i);
+                g.ontouchstart = (e) => startDrag(e, i);
+
+                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                circle.setAttribute('cx', v.x);
+                circle.setAttribute('cy', v.y);
+                circle.setAttribute('r', '18');
+                circle.setAttribute('fill', '#1e3a5f');
+                circle.setAttribute('stroke', '#2dd4bf');
+                circle.setAttribute('stroke-width', '2.5');
+                circle.classList.add('node-circle');
+
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('x', v.x);
+                text.setAttribute('y', v.y + 5);
+                text.setAttribute('text-anchor', 'middle');
+                text.setAttribute('fill', '#e2e8f0');
+                text.setAttribute('font-size', '13');
+                text.setAttribute('font-weight', '600');
+                text.textContent = i;
+
+                g.appendChild(circle);
+                g.appendChild(text);
+                svg.appendChild(g);
+            });
+
+            document.getElementById('countV').textContent = vertices.length;
+            document.getElementById('countE').textContent = edges.length;
+            document.getElementById('countT').textContent = triangles.length;
+        }
+
+        // Drag support
+        function startDrag(e, i) {
+            draggedVertex = i;
+            e.preventDefault();
+        }
+
+        document.addEventListener('mousemove', (e) => {
+            if (draggedVertex === null) return;
+            const svg = document.getElementById('simplicialSvg');
+            const rect = svg.getBoundingClientRect();
+            const scaleX = 400 / rect.width;
+            const scaleY = 360 / rect.height;
+            vertices[draggedVertex].x = Math.max(20, Math.min(380, (e.clientX - rect.left) * scaleX));
+            vertices[draggedVertex].y = Math.max(20, Math.min(340, (e.clientY - rect.top) * scaleY));
+            renderVisualization();
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (draggedVertex !== null) {
+                renderVertexInputs();
+                draggedVertex = null;
+            }
+        });
+
+        // ==================== Matrix Computation ====================
+        function computeAll() {
+            parseInputs();
+            const B1 = buildB1();
+            const B2 = buildB2();
+
+            renderMatrix('B1Matrix', B1, '顶点\\边', edges.map((_, i) => `e${i}`));
+            renderMatrix('B2Matrix', B2, '边\\△', triangles.map((_, i) => `t${i}`));
+
+            const L0 = matMul(B1, transpose(B1));
+            const L1 = add(matMul(transpose(B1), B1), matMul(B2, transpose(B2)));
+            const L2 = matMul(transpose(B2), B2);
+
+            renderMatrix('L0Matrix', L0, '', vertices.map((_, i) => `v${i}`));
+            renderMatrix('L1Matrix', L1, '', edges.map((_, i) => `e${i}`));
+            renderMatrix('L2Matrix', L2, '', triangles.map((_, i) => `t${i}`));
+
+            // Spectrum
+            const vals0 = eigenvaluesSymmetric(L0);
+            const vals1 = eigenvaluesSymmetric(L1);
+            const vals2 = eigenvaluesSymmetric(L2);
+
+            renderSpectrum('spectrumL0', vals0, 'teal');
+            renderSpectrum('spectrumL1', vals1, 'primary');
+            renderSpectrum('spectrumL2', vals2, 'accent');
+
+            const beta0 = vals0.filter(v => Math.abs(v) < 1e-8).length;
+            const beta1 = vals1.filter(v => Math.abs(v) < 1e-8).length;
+            const beta2 = vals2.filter(v => Math.abs(v) < 1e-8).length;
+
+            document.getElementById('beta0').textContent = beta0;
+            document.getElementById('beta1').textContent = beta1;
+            document.getElementById('beta2').textContent = beta2;
+
+            // Euler characteristic
+            const chi = vertices.length - edges.length + triangles.length;
+            const chiBetti = beta0 - beta1 + beta2;
+            document.getElementById('chiLeft').textContent = chi;
+            document.getElementById('chiRight').textContent = chiBetti;
+            document.getElementById('chiVerify').textContent = chi === chiBetti ? '✓ 欧拉示性数验证通过！' : '✗ 不匹配（检查矩阵计算）';
+
+            // Flow inputs
+            renderFlowInputs();
+        }
+
+        function buildB1() {
+            const nV = vertices.length, nE = edges.length;
+            const B1 = Array(nV).fill(null).map(() => Array(nE).fill(0));
+            edges.forEach((e, ei) => {
+                B1[e[0]][ei] = -1;
+                B1[e[1]][ei] = 1;
+            });
+            return B1;
+        }
+
+        function buildB2() {
+            const nE = edges.length, nT = triangles.length;
+            const B2 = Array(nE).fill(null).map(() => Array(nT).fill(0));
+            if (nT === 0) return B2;
+
+            const edgeMap = {};
+            edges.forEach((e, ei) => {
+                edgeMap[`${e[0]},${e[1]}`] = [ei, 1];
+                edgeMap[`${e[1]},${e[0]}`] = [ei, -1];
+            });
+
+            triangles.forEach((t, ti) => {
+                const triEdges = [[t[0], t[1]], [t[1], t[2]], [t[2], t[0]]];
+                triEdges.forEach(te => {
+                    const key = `${te[0]},${te[1]}`;
+                    if (edgeMap[key]) {
+                        const [ei, sign] = edgeMap[key];
+                        B2[ei][ti] = sign;
+                    }
+                });
+            });
+            return B2;
+        }
+
+        // Matrix utils
+        function transpose(M) {
+            if (M.length === 0) return [];
+            return M[0].map((_, j) => M.map((_, i) => M[i][j]));
+        }
+        function matMul(A, B) {
+            if (A.length === 0 || B.length === 0) return [];
+            const m = A.length, n = B[0].length, p = B.length;
+            const C = Array(m).fill(null).map(() => Array(n).fill(0));
+            for (let i = 0; i < m; i++)
+                for (let j = 0; j < n; j++)
+                    for (let k = 0; k < p; k++)
+                        C[i][j] += A[i][k] * B[k][j];
+            return C;
+        }
+        function add(A, B) {
+            return A.map((row, i) => row.map((a, j) => a + B[i][j]));
+        }
+
+        // Simple power iteration for eigenvalues (sufficient for demo)
+        function eigenvaluesSymmetric(M) {
+            const n = M.length;
+            if (n === 0) return [];
+            // Use QR-like approach for small matrices
+            // For demo: simple Jacobi or just compute characteristic polynomial for n<=5
+            // We'll use a basic approach: convert to tridiagonal and find roots approximately
+
+            // For small matrices, use a simple iterative method
+            let A = M.map(row => [...row]);
+            const eps = 1e-12;
+
+            // Basic QR algorithm with shifts for symmetric matrices
+            for (let iter = 0; iter < 100; iter++) {
+                let maxOff = 0;
+                for (let i = 0; i < n; i++)
+                    for (let j = i+1; j < n; j++)
+                        maxOff = Math.max(maxOff, Math.abs(A[i][j]));
+                if (maxOff < eps) break;
+
+                // Jacobi rotation on largest off-diagonal
+                let p = 0, q = 1;
+                let max = Math.abs(A[0][1]);
+                for (let i = 0; i < n; i++) {
+                    for (let j = i+1; j < n; j++) {
+                        if (Math.abs(A[i][j]) > max) {
+                            max = Math.abs(A[i][j]);
+                            p = i; q = j;
+                        }
+                    }
+                }
+
+                if (Math.abs(A[p][q]) < eps) break;
+
+                const tau = (A[q][q] - A[p][p]) / (2 * A[p][q]);
+                let t = Math.sign(tau) / (Math.abs(tau) + Math.sqrt(1 + tau*tau));
+                if (tau === 0) t = 1;
+                const c = 1 / Math.sqrt(1 + t*t);
+                const s = t * c;
+
+                const app = A[p][p], aqq = A[q][q], apq = A[p][q];
+                A[p][p] = c*c*app - 2*s*c*apq + s*s*aqq;
+                A[q][q] = s*s*app + 2*s*c*apq + c*c*aqq;
+                A[p][q] = A[q][p] = 0;
+
+                for (let i = 0; i < n; i++) {
+                    if (i !== p && i !== q) {
+                        const aip = A[i][p], aiq = A[i][q];
+                        A[i][p] = A[p][i] = c*aip - s*aiq;
+                        A[i][q] = A[q][i] = s*aip + c*aiq;
+                    }
+                }
+            }
+
+            return A.map((row, i) => row[i]).sort((a, b) => a - b);
+        }
+
+        function renderMatrix(containerId, M, rowLabel, colLabels) {
+            const container = document.getElementById(containerId);
+            if (M.length === 0 || M[0].length === 0) {
+                container.innerHTML = '<div class="text-slate-500 text-center py-4">空矩阵</div>';
+                return;
+            }
+
+            const nRows = M.length, nCols = M[0].length;
+            const maxVal = Math.max(...M.flat().map(Math.abs)) || 1;
+
+            let html = '<div class="inline-grid gap-0.5 text-xs font-mono" style="grid-template-columns: auto' + ' auto'.repeat(nCols) + ';">';
+
+            // Header
+            if (rowLabel) html += `<div class="px-1 py-1 text-slate-500">${rowLabel}</div>`;
+            colLabels.forEach(l => html += `<div class="px-2 py-1 text-center text-slate-500 font-semibold">${l}</div>`);
+
+            for (let i = 0; i < nRows; i++) {
+                html += `<div class="px-2 py-1 text-slate-500 font-semibold">${rowLabel ? '' : 'e' + i}</div>`;
+                for (let j = 0; j < nCols; j++) {
+                    const v = M[i][j];
+                    const intensity = Math.abs(v) / maxVal;
+                    const color = v > 0
+                        ? `rgba(96, 165, 250, ${0.1 + intensity * 0.4})`
+                        : v < 0
+                            ? `rgba(244, 63, 94, ${0.1 + intensity * 0.4})`
+                            : 'transparent';
+                    const textColor = intensity > 0.5 ? '#e2e8f0' : (v !== 0 ? '#94a3b8' : '#475569');
+                    html += `<div class="matrix-cell w-10 h-8 flex items-center justify-center rounded" style="background: ${color}; color: ${textColor}">${v === 0 ? '0' : v.toFixed(1)}</div>`;
+                }
+            }
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function renderSpectrum(containerId, vals, colorTheme) {
+            const container = document.getElementById(containerId);
+            if (vals.length === 0) {
+                container.innerHTML = '<div class="text-slate-500 text-center py-2">空</div>';
+                return;
+            }
+
+            const maxVal = Math.max(...vals.map(Math.abs), 0.001);
+            const colors = { teal: 'bg-teal-500', primary: 'bg-primary-500', accent: 'bg-accent-500' };
+            const zeroColors = { teal: 'bg-teal-400', primary: 'bg-primary-400', accent: 'bg-accent-400' };
+
+            container.innerHTML = vals.map((v, i) => {
+                const isZero = Math.abs(v) < 1e-8;
+                const barColor = isZero ? zeroColors[colorTheme] : colors[colorTheme];
+                const pct = Math.min(100, (Math.abs(v) / maxVal) * 100);
+                const label = isZero ? '0*' : v.toFixed(4);
+                return `
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-slate-500 w-6">λ${i}</span>
+                        <div class="flex-1 h-4 bg-slate-900/50 rounded-full overflow-hidden">
+                            <div class="eigen-bar h-full rounded-full ${barColor} ${isZero ? 'animate-pulse' : 'opacity-70'}" style="width: ${Math.max(pct, 3)}%"></div>
+                        </div>
+                        <span class="text-xs font-mono w-16 text-right ${isZero ? 'text-' + colorTheme + '-400 font-bold' : 'text-slate-400'}">${label}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // ==================== Hodge Decomposition UI ====================
+        function renderFlowInputs() {
+            const container = document.getElementById('flowInputs');
+            if (edges.length === 0) {
+                container.innerHTML = '<div class="text-slate-500 text-xs">请先定义边</div>';
+                return;
+            }
+            container.innerHTML = edges.map((e, i) => `
+                <div class="flex items-center gap-2">
+                    <span class="text-xs text-slate-500 w-12">e${i} (${e[0]}→${e[1]})</span>
+                    <input type="number" step="0.1" value="${(Math.random()*2-1).toFixed(1)}" id="flow-${i}" class="flex-1 px-2 py-1 text-xs bg-slate-900 border border-slate-700 rounded font-mono text-slate-300">
+                </div>
+            `).join('');
+        }
+
+        function decomposeFlow() {
+            const f = edges.map((_, i) => parseFloat(document.getElementById(`flow-${i}`).value) || 0);
+
+            // Compute projection
+            const B1 = buildB1();
+            const B2 = buildB2();
+
+            // f_grad = B1^T @ pinv(B1 @ B1^T) @ B1 @ f
+            const L0 = matMul(B1, transpose(B1));
+            const L0Inv = pseudoInverse(L0);
+            const phi = matMul(matMul(L0Inv, B1), f.map(x => [x])).map(r => r[0]);
+            const f_grad = matMul(transpose(B1), phi.map(x => [x])).map(r => r[0]);
+
+            // f_curl = B2 @ pinv(B2^T @ B2) @ B2^T @ f
+            let f_curl = edges.map(() => 0);
+            if (B2.length > 0 && B2[0].length > 0) {
+                const L2t = matMul(transpose(B2), B2);
+                const L2tInv = pseudoInverse(L2t);
+                const w = matMul(matMul(L2tInv, transpose(B2)), f.map(x => [x])).map(r => r[0]);
+                f_curl = matMul(B2, w.map(x => [x])).map(r => r[0]);
+            }
+
+            const f_harm = f.map((fi, i) => fi - f_grad[i] - f_curl[i]);
+
+            const container = document.getElementById('decompositionResult');
+            container.innerHTML = `
+                <div class="bg-slate-900/50 rounded-lg p-4">
+                    <div class="text-xs text-slate-500 mb-2">原信号 f</div>
+                    <div class="font-mono text-sm text-slate-300">[${f.map(v => v.toFixed(2)).join(', ')}]</div>
+                </div>
+                <div class="bg-teal-900/20 rounded-lg p-4 border border-teal-700/30">
+                    <div class="text-xs text-teal-400 mb-2">梯度分量 (∇φ)</div>
+                    <div class="font-mono text-sm text-teal-300">[${f_grad.map(v => v.toFixed(2)).join(', ')}]</div>
+                    <div class="text-xs text-teal-600 mt-1">能量: ${dot(f_grad, f_grad).toFixed(4)}</div>
+                </div>
+                <div class="bg-primary-900/20 rounded-lg p-4 border border-primary-700/30">
+                    <div class="text-xs text-primary-400 mb-2">旋度分量 (∇×w)</div>
+                    <div class="font-mono text-sm text-primary-300">[${f_curl.map(v => v.toFixed(2)).join(', ')}]</div>
+                    <div class="text-xs text-primary-600 mt-1">能量: ${dot(f_curl, f_curl).toFixed(4)}</div>
+                </div>
+                <div class="bg-warm-900/20 rounded-lg p-4 border border-warm-700/30">
+                    <div class="text-xs text-warm-400 mb-2">调和分量 h</div>
+                    <div class="font-mono text-sm text-warm-300">[${f_harm.map(v => v.toFixed(2)).join(', ')}]</div>
+                    <div class="text-xs text-warm-600 mt-1">能量: ${dot(f_harm, f_harm).toFixed(4)}</div>
+                </div>
+                <div class="text-xs text-slate-500 text-center">
+                    正交验证: ⟨grad,curl⟩=${dot(f_grad, f_curl).toFixed(4)}, ⟨grad,harm⟩=${dot(f_grad, f_harm).toFixed(4)}, ⟨curl,harm⟩=${dot(f_curl, f_harm).toFixed(4)}
+                </div>
+            `;
+        }
+
+        function dot(a, b) {
+            return a.reduce((s, x, i) => s + x * b[i], 0);
+        }
+
+        // Simple pseudo-inverse for small symmetric matrices
+        function pseudoInverse(M) {
+            const n = M.length;
+            if (n === 0) return [];
+            // Eigendecomposition: M = V D V^T, M^+ = V D^+ V^T
+            const vals = eigenvaluesSymmetric(M.map(r => [...r]));
+            // Build diagonal pseudo-inverse
+            const Dplus = vals.map(v => Math.abs(v) < 1e-10 ? 0 : 1/v);
+
+            // For simplicity with small matrices: use a basic approach
+            // We'll compute pinv via SVD-like approach
+            // For demo purposes, use the fact that M is symmetric
+
+            // Use power iteration to get eigenvectors
+            let V = Array(n).fill(null).map(() => Array(n).fill(0));
+            let A = M.map(r => [...r]);
+
+            for (let k = 0; k < n; k++) {
+                let vec = Array(n).fill(0);
+                vec[k] = 1;
+                for (let iter = 0; iter < 50; iter++) {
+                    let newVec = Array(n).fill(0);
+                    for (let i = 0; i < n; i++)
+                        for (let j = 0; j < n; j++)
+                            newVec[i] += A[i][j] * vec[j];
+                    const norm = Math.sqrt(newVec.reduce((s, x) => s + x*x, 0));
+                    if (norm < 1e-12) break;
+                    vec = newVec.map(x => x / norm);
+                }
+                for (let i = 0; i < n; i++) V[i][k] = vec[i];
+                // Deflate
+                for (let i = 0; i < n; i++)
+                    for (let j = 0; j < n; j++)
+                        A[i][j] -= vals[k] * vec[i] * vec[j];
+            }
+
+            // M^+ = V @ diag(Dplus) @ V^T
+            const result = Array(n).fill(null).map(() => Array(n).fill(0));
+            for (let i = 0; i < n; i++)
+                for (let j = 0; j < n; j++)
+                    for (let k = 0; k < n; k++)
+                        result[i][j] += V[i][k] * Dplus[k] * V[j][k];
+            return result;
+        }
+
+        // ==================== Tab Switching ====================
+        function switchTab(tab, btn) {
+            document.querySelectorAll('.code-section').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`code-${tab}`).classList.remove('hidden');
+            document.querySelectorAll('.tab-btn').forEach(b => {
+                b.classList.remove('active', 'text-slate-200');
+                b.classList.add('text-slate-400');
+            });
+            btn.classList.add('active', 'text-slate-200');
+            btn.classList.remove('text-slate-400');
+        }
+
+        function highlightStep(idx) {
+            document.querySelectorAll('.step-card').forEach((card, i) => {
+                card.classList.toggle('active', i === idx);
+            });
+        }
+
+        // ==================== Scroll Indicator ====================
+        window.addEventListener('scroll', () => {
+            const scrollTop = document.documentElement.scrollTop || document.body.scrollTop;
+            const scrollHeight = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+            const progress = (scrollTop / scrollHeight) * 100;
+            document.getElementById('scrollBar').style.width = progress + '%';
+        });
+
+        // ==================== Init ====================
+        document.addEventListener('DOMContentLoaded', () => {
+            updateInputsFromState();
+            renderVertexInputs();
+            renderVisualization();
+            computeAll();
+            highlightStep(0);
+            hljs.highlightAll();
+        });
+    </script>
+</body>
+</html>
