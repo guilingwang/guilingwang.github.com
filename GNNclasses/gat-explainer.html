@@ -1,0 +1,1345 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图注意力网络 (GAT) 完全解析</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Noto+Serif+SC:wght@400;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'Noto Serif SC', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        primary: { 50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe', 300: '#93c5fd', 400: '#60a5fa', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8', 800: '#1e40af', 900: '#1e3a8a' },
+                        accent: { 50: '#fdf4ff', 100: '#fae8ff', 200: '#f5d0fe', 300: '#f0abfc', 400: '#e879f9', 500: '#d946ef', 600: '#c026d3', 700: '#a21caf', 800: '#86198f', 900: '#701a75' },
+                        warm: { 50: '#fffbeb', 100: '#fef3c7', 200: '#fde68a', 300: '#fcd34d', 400: '#fbbf24', 500: '#f59e0b', 600: '#d97706', 700: '#b45309', 800: '#92400e', 900: '#78350f' },
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Inter', 'Noto Serif SC', sans-serif; background: #0f172a; color: #e2e8f0; }
+        .math { font-family: 'JetBrains Mono', monospace; }
+        .gradient-text { background: linear-gradient(135deg, #60a5fa 0%, #c084fc 50%, #f472b6 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+        .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(148, 163, 184, 0.1); }
+        .node-circle { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+        .node-circle:hover { filter: brightness(1.3); transform: scale(1.15); }
+        .edge-line { transition: all 0.3s ease; }
+        .step-card { transition: all 0.3s ease; border-left: 3px solid transparent; }
+        .step-card.active { border-left-color: #60a5fa; background: rgba(96, 165, 250, 0.05); }
+        .highlight-anim { animation: pulse-highlight 2s infinite; }
+        @keyframes pulse-highlight { 0%, 100% { box-shadow: 0 0 0 0 rgba(96, 165, 250, 0.4); } 50% { box-shadow: 0 0 0 8px rgba(96, 165, 250, 0); } }
+        .matrix-cell { transition: all 0.2s ease; }
+        .matrix-cell:hover { background: rgba(96, 165, 250, 0.3) !important; transform: scale(1.1); }
+        .tab-btn { transition: all 0.2s ease; }
+        .tab-btn.active { background: rgba(96, 165, 250, 0.15); color: #60a5fa; border-color: #60a5fa; }
+        .scroll-indicator { position: fixed; top: 0; left: 0; height: 3px; background: linear-gradient(90deg, #60a5fa, #c084fc, #f472b6); z-index: 100; transition: width 0.1s; }
+        .attention-arc { transition: all 0.3s ease; }
+        .code-section pre { margin: 0; border-radius: 0.75rem; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+        .tooltip { position: absolute; background: #1e293b; border: 1px solid #334155; padding: 8px 12px; border-radius: 8px; font-size: 12px; pointer-events: none; z-index: 50; opacity: 0; transition: opacity 0.2s; }
+        .input-slider { -webkit-appearance: none; appearance: none; height: 6px; border-radius: 3px; background: #334155; outline: none; }
+        .input-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #60a5fa; cursor: pointer; border: 2px solid #1e293b; }
+        .result-bar { transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+    </style>
+</head>
+<body class="min-h-screen">
+    <div class="scroll-indicator" id="scrollBar"></div>
+    <div class="tooltip" id="tooltip"></div>
+
+    <!-- Hero Section -->
+    <section class="relative min-h-[70vh] flex items-center justify-center overflow-hidden">
+        <div class="absolute inset-0 opacity-20">
+            <svg width="100%" height="100%">
+                <defs>
+                    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                        <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(96,165,250,0.1)" stroke-width="0.5"/>
+                    </pattern>
+                </defs>
+                <rect width="100%" height="100%" fill="url(#grid)"/>
+            </svg>
+        </div>
+        <div class="relative z-10 text-center px-4 max-w-5xl mx-auto">
+            <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary-900/50 border border-primary-700/30 text-primary-300 text-sm mb-6">
+                <span class="w-2 h-2 rounded-full bg-primary-400 animate-pulse"></span>
+                Graph Attention Networks (Veličković et al., 2018)
+            </div>
+            <h1 class="text-5xl md:text-7xl font-bold mb-6 leading-tight">
+                <span class="gradient-text">图注意力网络</span>
+                <br>
+                <span class="text-slate-300 text-3xl md:text-4xl font-medium">彻底弄懂 GAT</span>
+            </h1>
+            <p class="text-xl text-slate-400 max-w-2xl mx-auto leading-relaxed mb-8">
+                一个页面，从图结构到注意力权重，从数学公式到 PyTorch 代码，<br class="hidden md:block">
+                让你只读一遍就彻底理解 GAT 的前向传播全过程。
+            </p>
+            <div class="flex flex-wrap justify-center gap-3 text-sm">
+                <span class="px-3 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700 text-slate-300">自注意力机制</span>
+                <span class="px-3 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700 text-slate-300"> masked softmax</span>
+                <span class="px-3 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700 text-slate-300">多头注意力</span>
+                <span class="px-3 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700 text-slate-300">LeakyReLU</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- Section 1: 核心思想 -->
+    <section class="max-w-6xl mx-auto px-4 py-16">
+        <div class="mb-4">
+            <span class="text-primary-400 font-mono text-sm">01 / CORE IDEA</span>
+        </div>
+        <h2 class="text-3xl font-bold mb-8 text-white">一句话理解 GAT</h2>
+
+        <div class="glass rounded-2xl p-8 mb-10">
+            <div class="text-xl leading-relaxed text-slate-200 mb-6">
+                <span class="text-primary-400 font-semibold">GAT 的核心：</span>对于图中每个节点，
+                <span class="bg-primary-900/40 px-2 py-0.5 rounded text-primary-300">根据邻居节点的特征重要性（注意力权重）</span>
+                来加权聚合邻居信息，从而生成该节点的新表示。
+            </div>
+            <div class="grid md:grid-cols-3 gap-4">
+                <div class="bg-slate-800/50 rounded-xl p-5 border border-slate-700/50">
+                    <div class="text-warm-400 font-mono text-lg mb-2">GCN 的问题</div>
+                    <p class="text-slate-400 text-sm">所有邻居一视同仁，权重由度矩阵固定决定，无法区分邻居的重要性。</p>
+                </div>
+                <div class="flex items-center justify-center">
+                    <svg width="40" height="40" viewBox="0 0 40 40" class="text-primary-400">
+                        <path d="M10 20h20M25 14l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <div class="bg-primary-900/20 rounded-xl p-5 border border-primary-700/30">
+                    <div class="text-primary-400 font-mono text-lg mb-2">GAT 的改进</div>
+                    <p class="text-slate-400 text-sm">通过<strong>可学习的注意力机制</strong>，为每个邻居动态分配权重，重要邻居贡献更大。</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 图结构可视化 -->
+        <div class="grid lg:grid-cols-2 gap-8">
+            <div>
+                <h3 class="text-lg font-semibold mb-4 text-slate-200">示例图结构</h3>
+                <div class="glass rounded-2xl p-6 relative" style="min-height: 380px;">
+                    <svg id="graphSvg" width="100%" height="360" viewBox="0 0 500 360">
+                        <!-- Edges -->
+                        <line x1="250" y1="80" x2="130" y2="180" stroke="#475569" stroke-width="2" class="edge-line" id="e01"/>
+                        <line x1="250" y1="80" x2="370" y2="180" stroke="#475569" stroke-width="2" class="edge-line" id="e02"/>
+                        <line x1="250" y1="80" x2="250" y2="280" stroke="#475569" stroke-width="2" class="edge-line" id="e03"/>
+                        <line x1="130" y1="180" x2="250" y2="280" stroke="#475569" stroke-width="2" class="edge-line" id="e13"/>
+                        <line x1="370" y1="180" x2="250" y2="280" stroke="#475569" stroke-width="2" class="edge-line" id="e23"/>
+                        <line x1="130" y1="180" x2="370" y2="180" stroke="#475569" stroke-width="2" class="edge-line" id="e12"/>
+                        <!-- Attention arcs (animated later) -->
+                        <g id="attentionArcs"></g>
+                        <!-- Nodes -->
+                        <g class="node-group" data-node="0" onclick="selectNode(0)" style="cursor: pointer;">
+                            <circle cx="250" cy="80" r="28" fill="#1e3a5f" stroke="#60a5fa" stroke-width="3" class="node-circle" id="node0"/>
+                            <text x="250" y="85" text-anchor="middle" fill="#e2e8f0" font-size="14" font-weight="600">0</text>
+                        </g>
+                        <g class="node-group" data-node="1" onclick="selectNode(1)" style="cursor: pointer;">
+                            <circle cx="130" cy="180" r="28" fill="#1e3a5f" stroke="#60a5fa" stroke-width="3" class="node-circle" id="node1"/>
+                            <text x="130" y="185" text-anchor="middle" fill="#e2e8f0" font-size="14" font-weight="600">1</text>
+                        </g>
+                        <g class="node-group" data-node="2" onclick="selectNode(2)" style="cursor: pointer;">
+                            <circle cx="370" cy="180" r="28" fill="#1e3a5f" stroke="#60a5fa" stroke-width="3" class="node-circle" id="node2"/>
+                            <text x="370" y="185" text-anchor="middle" fill="#e2e8f0" font-size="14" font-weight="600">2</text>
+                        </g>
+                        <g class="node-group" data-node="3" onclick="selectNode(3)" style="cursor: pointer;">
+                            <circle cx="250" cy="280" r="28" fill="#1e3a5f" stroke="#60a5fa" stroke-width="3" class="node-circle" id="node3"/>
+                            <text x="250" y="285" text-anchor="middle" fill="#e2e8f0" font-size="14" font-weight="600">3</text>
+                        </g>
+                        <!-- Labels -->
+                        <text x="250" y="50" text-anchor="middle" fill="#94a3b8" font-size="11">中心节点</text>
+                        <text x="80" y="180" text-anchor="middle" fill="#94a3b8" font-size="11">邻居 A</text>
+                        <text x="420" y="180" text-anchor="middle" fill="#94a3b8" font-size="11">邻居 B</text>
+                        <text x="250" y="325" text-anchor="middle" fill="#94a3b8" font-size="11">邻居 C</text>
+                    </svg>
+                    <div class="text-center text-sm text-slate-500 mt-2">点击节点查看该节点的注意力权重</div>
+                </div>
+            </div>
+            <div>
+                <h3 class="text-lg font-semibold mb-4 text-slate-200">节点特征 & 注意力权重</h3>
+                <div class="glass rounded-2xl p-6">
+                    <div class="mb-4">
+                        <div class="text-sm text-slate-400 mb-2">节点特征矩阵 X (4×3)</div>
+                        <div class="overflow-x-auto">
+                            <table class="text-sm font-mono">
+                                <thead><tr class="text-slate-500"><th class="px-2 py-1">节点</th><th class="px-2 py-1">dim0</th><th class="px-2 py-1">dim1</th><th class="px-2 py-1">dim2</th></tr></thead>
+                                <tbody id="featureTable"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="border-t border-slate-700 pt-4">
+                        <div class="text-sm text-slate-400 mb-3">
+                            当前选中节点: <span id="selectedNodeLabel" class="text-primary-400 font-bold">0</span>
+                            <span class="text-slate-600">（点击左图节点切换）</span>
+                        </div>
+                        <div class="text-sm text-slate-400 mb-2">对选中节点的注意力权重 α</div>
+                        <div id="attentionBars" class="space-y-2"></div>
+                    </div>
+                </div>
+                <div class="mt-4 glass rounded-2xl p-5">
+                    <div class="text-sm text-slate-400 mb-2">邻接矩阵 A</div>
+                    <div id="adjMatrix" class="flex justify-center"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Section 2: 数学公式推导 -->
+    <section class="max-w-6xl mx-auto px-4 py-16">
+        <div class="mb-4">
+            <span class="text-primary-400 font-mono text-sm">02 / MATHEMATICS</span>
+        </div>
+        <h2 class="text-3xl font-bold mb-8 text-white">数学推导：一步一步拆解</h2>
+
+        <div class="space-y-4" id="mathSteps">
+            <!-- Step 1 -->
+            <div class="step-card glass rounded-xl p-6 cursor-pointer" onclick="highlightStep(0)">
+                <div class="flex items-start gap-4">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-primary-900/50 border border-primary-700/30 flex items-center justify-center text-primary-400 font-bold">1</div>
+                    <div class="flex-1">
+                        <h3 class="font-semibold text-lg text-slate-200 mb-2">线性变换：将特征映射到高维空间</h3>
+                        <p class="text-slate-400 text-sm mb-3">每个节点的特征向量先乘一个可学习的权重矩阵 W，进行维度变换。</p>
+                        <div class="bg-slate-900/80 rounded-lg p-4 font-mono text-center text-lg">
+                            <span class="text-primary-400">h'<sub>i</sub></span> = <span class="text-warm-400">W</span> · <span class="text-accent-400">h<sub>i</sub></span>
+                        </div>
+                        <div class="mt-3 text-xs text-slate-500">
+                            <span class="text-warm-400">W</span> ∈ R<sup>F'×F</sup> — 权重矩阵 &nbsp;|&nbsp;
+                            <span class="text-accent-400">h<sub>i</sub></span> ∈ R<sup>F</sup> — 节点 i 的输入特征 &nbsp;|&nbsp;
+                            <span class="text-primary-400">h'<sub>i</sub></span> ∈ R<sup>F'</sup> — 变换后的特征
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2 -->
+            <div class="step-card glass rounded-xl p-6 cursor-pointer" onclick="highlightStep(1)">
+                <div class="flex items-start gap-4">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-primary-900/50 border border-primary-700/30 flex items-center justify-center text-primary-400 font-bold">2</div>
+                    <div class="flex-1">
+                        <h3 class="font-semibold text-lg text-slate-200 mb-2">计算注意力系数（未归一化）</h3>
+                        <p class="text-slate-400 text-sm mb-3">将节点 i 和邻居 j 的变换特征拼接，乘注意力向量 a，再通过 LeakyReLU 得到原始注意力值。</p>
+                        <div class="bg-slate-900/80 rounded-lg p-4 font-mono text-center text-lg">
+                            <span class="text-primary-400">e<sub>ij</sub></span> = LeakyReLU( <span class="text-warm-400">a</span><sup>T</sup> · [ <span class="text-accent-400">Wh<sub>i</sub></span> || <span class="text-accent-400">Wh<sub>j</sub></span> ] )
+                        </div>
+                        <div class="mt-3 text-xs text-slate-500">
+                            <span class="text-primary-400">e<sub>ij</sub></span> — 节点 j 对 i 的重要性 &nbsp;|&nbsp;
+                            <span class="text-warm-400">a</span> ∈ R<sup>2F'</sup> — 注意力向量 &nbsp;|&nbsp;
+                            || 表示向量拼接
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 3 -->
+            <div class="step-card glass rounded-xl p-6 cursor-pointer" onclick="highlightStep(2)">
+                <div class="flex items-start gap-4">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-primary-900/50 border border-primary-700/30 flex items-center justify-center text-primary-400 font-bold">3</div>
+                    <div class="flex-1">
+                        <h3 class="font-semibold text-lg text-slate-200 mb-2">Masked Softmax：只对邻居归一化</h3>
+                        <p class="text-slate-400 text-sm mb-3">关键！softmax 的分母只包含节点 i 的邻居（包括自身），不是全图所有节点。这就是 <strong>masked</strong> 的含义。</p>
+                        <div class="bg-slate-900/80 rounded-lg p-4 font-mono text-center text-lg">
+                            <span class="text-primary-400">α<sub>ij</sub></span> = exp(<span class="text-primary-400">e<sub>ij</sub></span>) / Σ<sub>k ∈ N(i)</sub> exp(<span class="text-primary-400">e<sub>ik</sub></span>)
+                        </div>
+                        <div class="mt-3 text-xs text-slate-500">
+                            N(i) — 节点 i 的邻居集合（包含 i 自身）&nbsp;|&nbsp;
+                            α<sub>ij</sub> ∈ [0, 1] — 归一化后的注意力权重
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 4 -->
+            <div class="step-card glass rounded-xl p-6 cursor-pointer" onclick="highlightStep(3)">
+                <div class="flex items-start gap-4">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-primary-900/50 border border-primary-700/30 flex items-center justify-center text-primary-400 font-bold">4</div>
+                    <div class="flex-1">
+                        <h3 class="font-semibold text-lg text-slate-200 mb-2">加权聚合：生成新节点表示</h3>
+                        <p class="text-slate-400 text-sm mb-3">用注意力权重 α 对邻居的变换特征加权求和，得到节点 i 的新特征。</p>
+                        <div class="bg-slate-900/80 rounded-lg p-4 font-mono text-center text-lg">
+                            <span class="text-primary-400">h'<sub>i</sub></span> = σ( Σ<sub>j ∈ N(i)</sub> <span class="text-primary-400">α<sub>ij</sub></span> · <span class="text-warm-400">W</span> · <span class="text-accent-400">h<sub>j</sub></span> )
+                        </div>
+                        <div class="mt-3 text-xs text-slate-500">
+                            σ — 非线性激活函数（如 ELU）&nbsp;|&nbsp;
+                            输出维度 F'，与输入维度 F 可以不同
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 5 -->
+            <div class="step-card glass rounded-xl p-6 cursor-pointer" onclick="highlightStep(4)">
+                <div class="flex items-start gap-4">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-primary-900/50 border border-primary-700/30 flex items-center justify-center text-primary-400 font-bold">5</div>
+                    <div class="flex-1">
+                        <h3 class="font-semibold text-lg text-slate-200 mb-2">多头注意力：K 个独立注意力并行</h3>
+                        <p class="text-slate-400 text-sm mb-3">使用 K 组独立的 (W, a) 参数并行计算，结果拼接或取平均，增强表达能力和稳定性。</p>
+                        <div class="bg-slate-900/80 rounded-lg p-4 font-mono text-center text-lg">
+                            <span class="text-primary-400">h'<sub>i</sub></span> = ||<sub>k=1</sub><sup>K</sup> σ( Σ<sub>j ∈ N(i)</sub> <span class="text-primary-400">α<sub>ij</sub><sup>(k)</sup></span> · <span class="text-warm-400">W<sup>(k)</sup></span> · <span class="text-accent-400">h<sub>j</sub></span> )
+                        </div>
+                        <div class="mt-3 text-xs text-slate-500">
+                            拼接输出维度 = K × F' &nbsp;|&nbsp; 最后一层通常用平均代替拼接
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Section 3: 交互式计算演示 -->
+    <section class="max-w-6xl mx-auto px-4 py-16">
+        <div class="mb-4">
+            <span class="text-primary-400 font-mono text-sm">03 / INTERACTIVE DEMO</span>
+        </div>
+        <h2 class="text-3xl font-bold mb-8 text-white">交互式计算：输入 → 输出全过程</h2>
+
+        <div class="grid lg:grid-cols-3 gap-6">
+            <!-- Input Panel -->
+            <div class="glass rounded-2xl p-6">
+                <h3 class="font-semibold text-lg text-slate-200 mb-4 flex items-center gap-2">
+                    <span class="w-6 h-6 rounded bg-warm-500/20 text-warm-400 text-xs flex items-center justify-center">IN</span>
+                    输入参数
+                </h3>
+                <div class="space-y-4">
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">权重矩阵 W (3×3)</label>
+                        <div class="grid grid-cols-3 gap-1" id="wInputs"></div>
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">注意力向量 a (6维)</label>
+                        <div class="grid grid-cols-3 gap-1" id="aInputs"></div>
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">选择中心节点</label>
+                        <div class="flex gap-2">
+                            <button onclick="setDemoNode(0)" class="demo-node-btn px-3 py-1.5 rounded bg-slate-800 border border-slate-600 text-xs hover:border-primary-500 transition-colors" data-n="0">节点 0</button>
+                            <button onclick="setDemoNode(1)" class="demo-node-btn px-3 py-1.5 rounded bg-slate-800 border border-slate-600 text-xs hover:border-primary-500 transition-colors" data-n="1">节点 1</button>
+                            <button onclick="setDemoNode(2)" class="demo-node-btn px-3 py-1.5 rounded bg-slate-800 border border-slate-600 text-xs hover:border-primary-500 transition-colors" data-n="2">节点 2</button>
+                            <button onclick="setDemoNode(3)" class="demo-node-btn px-3 py-1.5 rounded bg-slate-800 border border-slate-600 text-xs hover:border-primary-500 transition-colors" data-n="3">节点 3</button>
+                        </div>
+                    </div>
+                    <button onclick="randomizeParams()" class="w-full py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs text-slate-300 transition-colors">
+                        随机初始化参数
+                    </button>
+                </div>
+            </div>
+
+            <!-- Computation Panel -->
+            <div class="glass rounded-2xl p-6 lg:col-span-2">
+                <h3 class="font-semibold text-lg text-slate-200 mb-4 flex items-center gap-2">
+                    <span class="w-6 h-6 rounded bg-primary-500/20 text-primary-400 text-xs flex items-center justify-center">→</span>
+                    计算过程（节点 <span id="demoNodeLabel">0</span>）
+                </h3>
+                <div class="space-y-4 overflow-y-auto max-h-[500px] pr-2">
+                    <!-- Step 1: Linear -->
+                    <div class="bg-slate-900/50 rounded-lg p-3">
+                        <div class="text-xs text-slate-500 mb-1">Step 1: 线性变换 Wh</div>
+                        <div id="step1Result" class="font-mono text-sm"></div>
+                    </div>
+                    <!-- Step 2: Attention scores -->
+                    <div class="bg-slate-900/50 rounded-lg p-3">
+                        <div class="text-xs text-slate-500 mb-1">Step 2: 原始注意力系数 e = LeakyReLU(a^T · [Wh_i || Wh_j])</div>
+                        <div id="step2Result" class="font-mono text-sm"></div>
+                    </div>
+                    <!-- Step 3: Softmax -->
+                    <div class="bg-slate-900/50 rounded-lg p-3">
+                        <div class="text-xs text-slate-500 mb-1">Step 3: Masked Softmax 归一化</div>
+                        <div id="step3Result" class="font-mono text-sm"></div>
+                    </div>
+                    <!-- Step 4: Aggregation -->
+                    <div class="bg-slate-900/50 rounded-lg p-3">
+                        <div class="text-xs text-slate-500 mb-1">Step 4: 加权聚合 h' = Σ α · Wh</div>
+                        <div id="step4Result" class="font-mono text-sm text-primary-300"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Section 4: 核心代码 -->
+    <section class="max-w-6xl mx-auto px-4 py-16">
+        <div class="mb-4">
+            <span class="text-primary-400 font-mono text-sm">04 / CODE</span>
+        </div>
+        <h2 class="text-3xl font-bold mb-8 text-white">核心代码（PyTorch + DGL）</h2>
+
+        <div class="glass rounded-2xl overflow-hidden">
+            <div class="flex border-b border-slate-700">
+                <button class="tab-btn active px-6 py-3 text-sm font-medium border-b-2 border-transparent" onclick="switchTab('pyg', this)">PyTorch Geometric</button>
+                <button class="tab-btn px-6 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400" onclick="switchTab('dgl', this)">DGL</button>
+                <button class="tab-btn px-6 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400" onclick="switchTab('pure', this)">纯 PyTorch</button>
+            </div>
+
+            <div id="code-pyg" class="code-section p-0">
+                <pre><code class="language-python">import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch_geometric.nn import MessagePassing
+from torch_geometric.utils import add_self_loops, softmax
+
+class GATConv(MessagePassing):
+    """
+    图注意力网络层 (Graph Attention Network Layer)
+
+    论文: Graph Attention Networks (Veličković et al., ICLR 2018)
+
+    核心思想: 对每条边 (i,j) 学习一个注意力权重 α_ij，
+    表示邻居 j 对中心节点 i 的重要性。
+    """
+
+    def __init__(self, in_channels, out_channels, heads=1,
+                 concat=True, dropout=0.0, negative_slope=0.2):
+        """
+        Args:
+            in_channels:  输入特征维度 F
+            out_channels: 输出特征维度 F'（每个头的输出维度）
+            heads:        注意力头数 K
+            concat:       True=拼接多头结果, False=取平均
+            dropout:      注意力权重的 dropout 概率
+            negative_slope: LeakyReLU 的负斜率
+        """
+        super().__init__(aggr='add', node_dim=0)
+
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.heads = heads
+        self.concat = concat
+        self.dropout = dropout
+        self.negative_slope = negative_slope
+
+        # ===== 可学习参数 =====
+        # W: 每个头独立一个权重矩阵 [heads, out_channels, in_channels]
+        #   将输入特征 F 维映射到 F' 维
+        self.weight = nn.Parameter(
+            torch.Tensor(heads, out_channels, in_channels)
+        )
+
+        # a: 注意力向量 [heads, 2 * out_channels]
+        #   拼接 Wh_i 和 Wh_j 后，用 a 计算注意力分数
+        #   2 * out_channels 是因为拼接了两个 F' 维向量
+        self.att = nn.Parameter(
+            torch.Tensor(heads, 2 * out_channels)
+        )
+
+        # 偏置项 [heads, out_channels] 或 [out_channels]
+        if concat:
+            self.bias = nn.Parameter(torch.Tensor(heads * out_channels))
+        else:
+            self.bias = nn.Parameter(torch.Tensor(out_channels))
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        """Xavier 初始化，保证梯度稳定传播"""
+        nn.init.xavier_uniform_(self.weight)
+        nn.init.xavier_uniform_(self.att)
+        nn.init.zeros_(self.bias)
+
+    def forward(self, x, edge_index):
+        """
+        前向传播
+
+        Args:
+            x: [N, F] 节点特征矩阵，N=节点数，F=输入维度
+            edge_index: [2, E] 边索引，COO 格式
+                        edge_index[0] = 源节点 (j)
+                        edge_index[1] = 目标节点 (i)
+                        注意：消息从 j 传播到 i
+
+        Returns:
+            out: [N, K*F'] 或 [N, F'] 输出特征
+        """
+        # ---------- Step 1: 线性变换 Wh ----------
+        # x: [N, F] -> [K, N, F] 复制 K 份，每个头独立计算
+        x = x.unsqueeze(0).repeat(self.heads, 1, 1)  # [K, N, F]
+
+        # 批量矩阵乘法: [K, N, F] @ [K, F, F'].T = [K, N, F']
+        # 每个头有自己的 W，得到 K 组变换后的特征
+        x = torch.einsum('knf,kof->kno', x, self.weight)  # [K, N, F']
+
+        # ---------- Step 2: 计算注意力系数 ----------
+        # 先给图添加自环边 (i,i)，因为节点自身信息也必须参与聚合
+        edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(1))
+
+        # 传播消息：在每条边上计算注意力分数
+        # message() 定义了每条边上的计算
+        # aggregate() 定义了聚合方式（已在 __init__ 中设为 'add'）
+        # update() 定义了聚合后的处理
+        out = self.propagate(edge_index, x=x)  # [K, N, F']
+
+        # ---------- Step 5: 多头合并 ----------
+        if self.concat:
+            # 拼接: [K, N, F'] -> [N, K*F']
+            out = out.permute(1, 0, 2).reshape(-1, self.heads * self.out_channels)
+        else:
+            # 平均: [K, N, F'] -> [N, F']
+            out = out.mean(dim=0)
+
+        # 加偏置
+        out = out + self.bias
+
+        return out
+
+    def message(self, x_i, x_j, edge_index_i, size_i):
+        """
+        定义每条边 (j->i) 上的消息计算
+
+        这是 GAT 的核心！在这里计算注意力权重 α_ij。
+
+        Args:
+            x_i: [K, E, F'] 目标节点 i 的特征（每条边的终点）
+            x_j: [K, E, F'] 源节点 j 的特征（每条边的起点）
+            edge_index_i: [E] 目标节点索引，用于 softmax 分组
+            size_i: 目标节点数量，用于 softmax
+        """
+        # --- Step 2a: 拼接 [Wh_i || Wh_j] ---
+        # x_i 和 x_j 的形状都是 [K, E, F']
+        # 在最后一维拼接 -> [K, E, 2*F']
+        x_cat = torch.cat([x_i, x_j], dim=-1)  # [K, E, 2*F']
+
+        # --- Step 2b: 计算 e_ij = LeakyReLU(a^T · [Wh_i || Wh_j]) ---
+        # att: [K, 2*F']，需要扩展为 [K, E, 2*F']
+        # einsum 'keo,ko->ke' = 对最后一维做内积
+        alpha = torch.einsum('keo,ko->ke', x_cat, self.att)  # [K, E]
+        alpha = F.leaky_relu(alpha, self.negative_slope)     # [K, E]
+
+        # --- Step 3: Masked Softmax ---
+        # 关键！softmax 按目标节点 i 分组，只对 i 的邻居归一化
+        # edge_index_i 告诉每条边的目标节点是谁
+        # size_i 是目标节点的总数
+        alpha = softmax(alpha, edge_index_i, num_nodes=size_i)  # [K, E]
+
+        # Dropout 正则化
+        alpha = F.dropout(alpha, p=self.dropout, training=self.training)
+
+        # --- Step 4: 加权消息 = α * Wh_j ---
+        # x_j 是源节点特征，用 alpha 加权
+        # alpha: [K, E] 需要扩展为 [K, E, 1] 来做广播乘法
+        return x_j * alpha.unsqueeze(-1)  # [K, E, F']
+
+    def update(self, aggr_out):
+        """
+        聚合完成后，应用非线性激活
+
+        aggr_out: [K, N, F'] 已经聚合好的结果（Σ α_ij * Wh_j）
+        """
+        # ELU 激活函数: x if x>0 else α(exp(x)-1)
+        return F.elu(aggr_out)
+
+
+# ========== 使用示例 ==========
+if __name__ == "__main__":
+    # 4 个节点，每个节点 3 维特征
+    x = torch.tensor([
+        [1.0, 0.5, 0.2],   # 节点 0
+        [0.3, 1.0, 0.1],   # 节点 1
+        [0.2, 0.4, 1.0],   # 节点 2
+        [0.5, 0.3, 0.8],   # 节点 3
+    ], dtype=torch.float)
+
+    # 边: 0-1, 0-2, 0-3, 1-2, 1-3, 2-3（无向图，双向存储）
+    edge_index = torch.tensor([
+        [0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3],
+        [1, 2, 3, 0, 2, 3, 0, 1, 3, 0, 1, 2]
+    ], dtype=torch.long)
+
+    # 创建 GAT 层：输入 3 维，输出 4 维，8 个头，拼接结果
+    gat = GATConv(in_channels=3, out_channels=4, heads=8, concat=True)
+
+    out = gat(x, edge_index)
+    print(f"输入形状:  {x.shape}")          # [4, 3]
+    print(f"输出形状:  {out.shape}")        # [4, 32] (8 heads * 4 out_channels)
+    print(f"注意力权重自动学习，无需手动指定！")
+</code></pre>
+            </div>
+
+            <div id="code-dgl" class="code-section p-0 hidden">
+                <pre><code class="language-python">import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import dgl
+import dgl.function as fn
+from dgl.nn import GATConv
+
+class GAT(nn.Module):
+    """
+    使用 DGL 官方实现的 GAT
+    DGL 将消息传递封装在底层，代码更简洁
+    """
+    def __init__(self, in_feats, hidden_feats, num_classes, num_heads):
+        super().__init__()
+
+        # 第一层: 输入 -> 隐藏层
+        # num_heads: 注意力头数
+        # feat_drop: 特征 dropout
+        # attn_drop: 注意力权重 dropout
+        # activation: 输出激活函数
+        self.layer1 = GATConv(
+            in_feats=in_feats,
+            out_feats=hidden_feats,
+            num_heads=num_heads,
+            feat_drop=0.1,
+            attn_drop=0.1,
+            activation=F.elu
+        )
+
+        # 第二层: 隐藏层 -> 输出层
+        # 最后一层通常用 1 个头，并取平均
+        self.layer2 = GATConv(
+            in_feats=hidden_feats * num_heads,  # 第一层拼接了多头
+            out_feats=num_classes,
+            num_heads=1,       # 输出层单头
+            feat_drop=0.1,
+            attn_drop=0.1,
+            activation=None    # 输出层不加激活，留给损失函数
+        )
+
+    def forward(self, g, features):
+        """
+        Args:
+            g: DGLGraph 对象，包含图结构
+            features: [N, F] 节点特征
+
+        Returns:
+            logits: [N, num_classes] 分类 logits
+        """
+        # Layer 1
+        h = self.layer1(g, features)     # [N, K, F']
+        h = h.flatten(1)                  # [N, K*F'] 拼接多头
+
+        # Layer 2
+        logits = self.layer2(g, h)       # [N, 1, num_classes]
+        logits = logits.mean(1)           # [N, num_classes] 取平均
+
+        return logits
+
+
+# ========== 手动实现（理解 DGL 内部原理）==========
+class GATLayerManual(nn.Module):
+    """
+    用 DGL 的消息传递 API 手动实现 GAT
+    帮助理解 DGL 的底层机制
+    """
+
+    def __init__(self, in_dim, out_dim):
+        super().__init__()
+        self.fc = nn.Linear(in_dim, out_dim, bias=False)
+        self.attn_fc = nn.Linear(2 * out_dim, 1, bias=False)
+
+    def edge_attention(self, edges):
+        """
+        在每条边上计算注意力分数
+        edges.src['z'] = Wh_j  源节点特征
+        edges.dst['z'] = Wh_i  目标节点特征
+        """
+        # 拼接 [Wh_i || Wh_j]
+        z2 = torch.cat([edges.src['z'], edges.dst['z']], dim=1)
+
+        # a^T · [Wh_i || Wh_j]，得到标量注意力分数
+        a = self.attn_fc(z2)
+
+        return {'e': F.leaky_relu(a)}
+
+    def message_func(self, edges):
+        """传递消息：包含源节点特征和注意力分数"""
+        return {'z': edges.src['z'], 'e': edges.data['e']}
+
+    def reduce_func(self, nodes):
+        """
+        聚合：对目标节点的所有入边做 softmax 后加权求和
+        """
+        # 对所有入边的注意力分数做 softmax
+        alpha = F.softmax(nodes.mailbox['e'], dim=1)
+
+        # 加权求和: Σ α * h
+        h = torch.sum(alpha * nodes.mailbox['z'], dim=1)
+
+        return {'h': h}
+
+    def forward(self, g, features):
+        # 1. 线性变换
+        z = self.fc(features)
+
+        # 2. 将特征存到节点上
+        g.ndata['z'] = z
+
+        # 3. 在边上计算注意力
+        g.apply_edges(self.edge_attention)
+
+        # 4. 消息传递 + 聚合
+        # pull 操作：对每个节点，从其邻居收集消息
+        g.update_all(self.message_func, self.reduce_func)
+
+        # 5. 返回更新后的节点特征
+        return g.ndata.pop('h')
+
+
+# ========== 使用示例 ==========
+if __name__ == "__main__":
+    # 创建图 (与 PyG 示例相同)
+    g = dgl.graph((
+        [0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3],
+        [1, 2, 3, 0, 2, 3, 0, 1, 3, 0, 1, 2]
+    ))
+
+    # 添加自环（GAT 默认需要）
+    g = dgl.add_self_loop(g)
+
+    # 节点特征
+    x = torch.tensor([
+        [1.0, 0.5, 0.2],
+        [0.3, 1.0, 0.1],
+        [0.2, 0.4, 1.0],
+        [0.5, 0.3, 0.8],
+    ], dtype=torch.float)
+
+    # 使用官方实现
+    conv = GATConv(in_feats=3, out_feats=4, num_heads=2)
+    out = conv(g, x)
+    print(f"DGL 输出形状: {out.shape}")  # [4, 2, 4]
+</code></pre>
+            </div>
+
+            <div id="code-pure" class="code-section p-0 hidden">
+                <pre><code class="language-python">import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class PureGATLayer(nn.Module):
+    """
+    纯 PyTorch 实现 GAT（不依赖 PyG/DGL）
+    用邻接矩阵实现，最直观理解矩阵运算过程
+    """
+
+    def __init__(self, in_features, out_features, dropout=0.0, alpha=0.2):
+        super().__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.dropout = dropout
+
+        # 可学习参数
+        self.W = nn.Parameter(torch.zeros(size=(in_features, out_features)))
+        self.a = nn.Parameter(torch.zeros(size=(2 * out_features, 1)))
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        nn.init.xavier_uniform_(self.W.data, gain=1.414)
+        nn.init.xavier_uniform_(self.a.data, gain=1.414)
+
+    def forward(self, x, adj):
+        """
+        最直观的前向传播：全部用矩阵运算
+
+        Args:
+            x:   [N, F]    节点特征矩阵
+            adj: [N, N]    邻接矩阵（包含自环）
+                           adj[i,j]=1 表示 j 是 i 的邻居
+
+        Returns:
+            h': [N, F']   输出特征
+        """
+        N = x.size(0)  # 节点数
+
+        # ===== Step 1: 线性变换 =====
+        # x: [N, F] @ W: [F, F'] = Wh: [N, F']
+        Wh = torch.mm(x, self.W)  # [N, F']
+
+        # ===== Step 2: 计算注意力矩阵 =====
+        # e_ij = a^T · [Wh_i || Wh_j]
+        #
+        # 技巧：不拼接，分别计算两部分：
+        # a = [a_1, a_2] 其中 a_1, a_2 ∈ R^{F'}
+        # e_ij = a_1^T Wh_i + a_2^T Wh_j
+
+        # 先算 a^T Wh -> [N, 1]
+        a_input = torch.matmul(Wh, self.a[:self.out_features])  # [N, 1]
+        a_input_neighbor = torch.matmul(Wh, self.a[self.out_features:])  # [N, 1]
+
+        # 广播: e_ij = a_input[i] + a_input_neighbor[j]
+        # [N, 1] + [1, N] = [N, N]
+        e = a_input + a_input_neighbor.t()  # [N, N]
+        e = F.leaky_relu(e, negative_slope=0.2)
+
+        # ===== Step 3: Masked Softmax =====
+        # 关键！用邻接矩阵 mask：只对邻居做 softmax
+        # adj = 0 的位置设为 -inf，softmax 后变为 0
+        mask = -9e15 * torch.ones_like(e)
+        masked_e = torch.where(adj > 0, e, mask)  # 邻居=e, 非邻居=-inf
+
+        # 按行 softmax（每行对应一个节点，对其邻居归一化）
+        attention = F.softmax(masked_e, dim=1)  # [N, N]
+        attention = F.dropout(attention, p=self.dropout, training=self.training)
+
+        # ===== Step 4: 加权聚合 =====
+        # h' = attention @ Wh
+        # [N, N] @ [N, F'] = [N, F']
+        h_prime = torch.matmul(attention, Wh)
+
+        # 非线性激活
+        return F.elu(h_prime), attention  # 返回结果 + 注意力权重（用于可视化）
+
+
+# ========== 完整可视化示例 ==========
+if __name__ == "__main__":
+    torch.manual_seed(42)  # 固定随机种子，结果可复现
+
+    # 4 个节点，3 维特征
+    x = torch.tensor([
+        [1.0, 0.5, 0.2],
+        [0.3, 1.0, 0.1],
+        [0.2, 0.4, 1.0],
+        [0.5, 0.3, 0.8],
+    ])
+
+    # 邻接矩阵（含自环）
+    adj = torch.tensor([
+        [1, 1, 1, 1],  # 节点 0: 连 0,1,2,3
+        [1, 1, 1, 1],  # 节点 1: 连 0,1,2,3
+        [1, 1, 1, 1],  # 节点 2: 连 0,1,2,3
+        [1, 1, 1, 1],  # 节点 3: 连 0,1,2,3
+    ], dtype=torch.float)
+
+    # 创建层
+    gat = PureGATLayer(in_features=3, out_features=2)
+
+    # 前向传播
+    out, attn = gat(x, adj)
+
+    print("=" * 50)
+    print("输入特征 x:")
+    print(x)
+    print("\n输出特征 h':")
+    print(out)
+    print("\n注意力权重矩阵 α:")
+    print(attn)
+    print("\n验证: 每行和 = 1 (softmax 性质)")
+    print(attn.sum(dim=1))
+</code></pre>
+            </div>
+        </div>
+    </section>
+
+    <!-- Section 5: 模型架构图 -->
+    <section class="max-w-6xl mx-auto px-4 py-16">
+        <div class="mb-4">
+            <span class="text-primary-400 font-mono text-sm">05 / ARCHITECTURE</span>
+        </div>
+        <h2 class="text-3xl font-bold mb-8 text-white">GAT 完整模型架构</h2>
+
+        <div class="glass rounded-2xl p-8 overflow-x-auto">
+            <svg viewBox="0 0 900 500" class="w-full min-w-[800px]">
+                <!-- Background -->
+                <rect x="20" y="20" width="860" height="460" rx="12" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+
+                <!-- Input Layer -->
+                <rect x="50" y="80" width="120" height="50" rx="8" fill="#1e3a5f" stroke="#60a5fa" stroke-width="2"/>
+                <text x="110" y="110" text-anchor="middle" fill="#e2e8f0" font-size="13" font-weight="600">输入特征 X</text>
+                <text x="110" y="128" text-anchor="middle" fill="#94a3b8" font-size="10">[N, F]</text>
+
+                <!-- Arrow 1 -->
+                <line x1="170" y1="105" x2="220" y2="105" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+                <text x="195" y="95" text-anchor="middle" fill="#94a3b8" font-size="9">线性变换</text>
+
+                <!-- GAT Layer 1 -->
+                <rect x="220" y="50" width="180" height="110" rx="10" fill="#1e293b" stroke="#60a5fa" stroke-width="2"/>
+                <text x="310" y="72" text-anchor="middle" fill="#60a5fa" font-size="12" font-weight="600">GAT Layer 1</text>
+
+                <!-- Inside Layer 1 -->
+                <rect x="235" y="80" width="60" height="28" rx="4" fill="#0f172a" stroke="#475569" stroke-width="1"/>
+                <text x="265" y="98" text-anchor="middle" fill="#e2e8f0" font-size="9">K 头注意力</text>
+
+                <rect x="305" y="80" width="40" height="28" rx="4" fill="#0f172a" stroke="#475569" stroke-width="1"/>
+                <text x="325" y="98" text-anchor="middle" fill="#e2e8f0" font-size="9">拼接</text>
+
+                <rect x="355" y="80" width="32" height="28" rx="4" fill="#0f172a" stroke="#475569" stroke-width="1"/>
+                <text x="371" y="98" text-anchor="middle" fill="#e2e8f0" font-size="9">ELU</text>
+
+                <text x="310" y="130" text-anchor="middle" fill="#94a3b8" font-size="9">输出: [N, K×F']</text>
+
+                <!-- Dropout 1 -->
+                <rect x="280" y="165" width="60" height="25" rx="4" fill="#451a03" stroke="#d97706" stroke-width="1"/>
+                <text x="310" y="182" text-anchor="middle" fill="#fbbf24" font-size="9">Dropout</text>
+
+                <!-- Arrow 2 -->
+                <line x1="310" y1="190" x2="310" y2="230" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+                <!-- GAT Layer 2 -->
+                <rect x="220" y="230" width="180" height="110" rx="10" fill="#1e293b" stroke="#c084fc" stroke-width="2"/>
+                <text x="310" y="252" text-anchor="middle" fill="#c084fc" font-size="12" font-weight="600">GAT Layer 2</text>
+
+                <rect x="235" y="260" width="60" height="28" rx="4" fill="#0f172a" stroke="#475569" stroke-width="1"/>
+                <text x="265" y="278" text-anchor="middle" fill="#e2e8f0" font-size="9">1 头注意力</text>
+
+                <rect x="305" y="260" width="40" height="28" rx="4" fill="#0f172a" stroke="#475569" stroke-width="1"/>
+                <text x="325" y="278" text-anchor="middle" fill="#e2e8f0" font-size="9">平均</text>
+
+                <rect x="355" y="260" width="32" height="28" rx="4" fill="#0f172a" stroke="#475569" stroke-width="1"/>
+                <text x="371" y="278" text-anchor="middle" fill="#e2e8f0" font-size="9">ELU</text>
+
+                <text x="310" y="310" text-anchor="middle" fill="#94a3b8" font-size="9">输出: [N, F'']</text>
+
+                <!-- Arrow 3 -->
+                <line x1="400" y1="285" x2="480" y2="285" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+                <!-- Classification Head -->
+                <rect x="480" y="260" width="120" height="50" rx="8" fill="#3f0f4a" stroke="#d946ef" stroke-width="2"/>
+                <text x="540" y="280" text-anchor="middle" fill="#e2e8f0" font-size="12" font-weight="600">分类层</text>
+                <text x="540" y="298" text-anchor="middle" fill="#94a3b8" font-size="10">Linear + Softmax</text>
+
+                <!-- Arrow 4 -->
+                <line x1="600" y1="285" x2="650" y2="285" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+                <!-- Output -->
+                <rect x="650" y="260" width="100" height="50" rx="8" fill="#1e3a5f" stroke="#60a5fa" stroke-width="2"/>
+                <text x="700" y="280" text-anchor="middle" fill="#e2e8f0" font-size="12" font-weight="600">预测结果</text>
+                <text x="700" y="298" text-anchor="middle" fill="#94a3b8" font-size="10">[N, C]</text>
+
+                <!-- Attention Detail Box -->
+                <rect x="480" y="80" width="250" height="140" rx="10" fill="#0f172a" stroke="#475569" stroke-width="1"/>
+                <text x="605" y="100" text-anchor="middle" fill="#60a5fa" font-size="11" font-weight="600">单头注意力内部</text>
+
+                <!-- Mini flow inside -->
+                <rect x="495" y="115" width="50" height="22" rx="4" fill="#1e293b" stroke="#60a5fa" stroke-width="1"/>
+                <text x="520" y="130" text-anchor="middle" fill="#e2e8f0" font-size="8">Wh_i</text>
+
+                <rect x="560" y="115" width="50" height="22" rx="4" fill="#1e293b" stroke="#60a5fa" stroke-width="1"/>
+                <text x="585" y="130" text-anchor="middle" fill="#e2e8f0" font-size="8">Wh_j</text>
+
+                <line x1="545" y1="126" x2="560" y2="126" stroke="#475569" stroke-width="1"/>
+                <text x="552" y="122" text-anchor="middle" fill="#94a3b8" font-size="7">||</text>
+
+                <line x1="585" y1="137" x2="585" y2="155" stroke="#475569" stroke-width="1"/>
+                <line x1="520" y1="137" x2="520" y2="155" stroke="#475569" stroke-width="1"/>
+                <line x1="520" y1="155" x2="605" y2="155" stroke="#475569" stroke-width="1"/>
+                <line x1="605" y1="155" x2="605" y2="165" stroke="#475569" stroke-width="1" marker-end="url(#arrow)"/>
+
+                <rect x="560" y="165" width="90" height="22" rx="4" fill="#451a03" stroke="#f59e0b" stroke-width="1"/>
+                <text x="605" y="180" text-anchor="middle" fill="#fbbf24" font-size="8">a^T · concat</text>
+
+                <line x1="605" y1="187" x2="605" y2="197" stroke="#475569" stroke-width="1"/>
+                <rect x="560" y="197" width="90" height="22" rx="4" fill="#1e293b" stroke="#c084fc" stroke-width="1"/>
+                <text x="605" y="212" text-anchor="middle" fill="#c084fc" font-size="8">softmax → α</text>
+
+                <!-- Legend -->
+                <rect x="50" y="370" width="300" height="90" rx="8" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+                <text x="65" y="390" fill="#e2e8f0" font-size="11" font-weight="600">图例</text>
+
+                <rect x="65" y="400" width="14" height="10" rx="2" fill="#1e3a5f" stroke="#60a5fa" stroke-width="1"/>
+                <text x="85" y="409" fill="#94a3b8" font-size="9">张量 / 特征</text>
+
+                <rect x="160" y="400" width="14" height="10" rx="2" fill="#1e293b" stroke="#60a5fa" stroke-width="1"/>
+                <text x="180" y="409" fill="#94a3b8" font-size="9">GAT 层</text>
+
+                <rect x="65" y="420" width="14" height="10" rx="2" fill="#3f0f4a" stroke="#d946ef" stroke-width="1"/>
+                <text x="85" y="429" fill="#94a3b8" font-size="9">分类头</text>
+
+                <rect x="160" y="420" width="14" height="10" rx="2" fill="#451a03" stroke="#d97706" stroke-width="1"/>
+                <text x="180" y="429" fill="#94a3b8" font-size="9">Dropout</text>
+
+                <rect x="65" y="440" width="14" height="10" rx="2" fill="#0f172a" stroke="#f59e0b" stroke-width="1"/>
+                <text x="85" y="449" fill="#94a3b8" font-size="9">注意力计算</text>
+
+                <!-- Arrow marker -->
+                <defs>
+                    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+                        <path d="M0,0 L0,6 L9,3 z" fill="#475569"/>
+                    </marker>
+                </defs>
+            </svg>
+        </div>
+    </section>
+
+    <!-- Section 6: 关键对比 -->
+    <section class="max-w-6xl mx-auto px-4 py-16">
+        <div class="mb-4">
+            <span class="text-primary-400 font-mono text-sm">06 / COMPARISON</span>
+        </div>
+        <h2 class="text-3xl font-bold mb-8 text-white">GAT vs GCN vs GraphSAGE</h2>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="border-b border-slate-700">
+                        <th class="py-4 px-4 text-slate-300 font-semibold">特性</th>
+                        <th class="py-4 px-4 text-warm-400 font-semibold">GCN</th>
+                        <th class="py-4 px-4 text-accent-400 font-semibold">GraphSAGE</th>
+                        <th class="py-4 px-4 text-primary-400 font-semibold">GAT</th>
+                    </tr>
+                </thead>
+                <tbody class="text-sm">
+                    <tr class="border-b border-slate-800">
+                        <td class="py-4 px-4 text-slate-300">邻居权重</td>
+                        <td class="py-4 px-4 text-slate-400">由度矩阵固定决定<br><span class="text-xs text-slate-600">1/√(d_i·d_j)</span></td>
+                        <td class="py-4 px-4 text-slate-400">均匀平均<br><span class="text-xs text-slate-600">1/|N(i)|</span></td>
+                        <td class="py-4 px-4 text-primary-300 font-medium">可学习的注意力权重<br><span class="text-xs text-primary-500/70">α_ij = softmax(e_ij)</span></td>
+                    </tr>
+                    <tr class="border-b border-slate-800">
+                        <td class="py-4 px-4 text-slate-300">同配/异配</td>
+                        <td class="py-4 px-4 text-slate-400">假设同配性<br>适合同质图</td>
+                        <td class="py-4 px-4 text-slate-400">中等灵活性</td>
+                        <td class="py-4 px-4 text-primary-300 font-medium">自适应权重<br>对异配图更鲁棒</td>
+                    </tr>
+                    <tr class="border-b border-slate-800">
+                        <td class="py-4 px-4 text-slate-300">计算效率</td>
+                        <td class="py-4 px-4 text-slate-400">O(E·F·F')<br><span class="text-green-400">最高效</span></td>
+                        <td class="py-4 px-4 text-slate-400">O(E·F·F')<br>需采样邻居</td>
+                        <td class="py-4 px-4 text-primary-300 font-medium">O(E·F·F'·K)<br>K=头数，稍慢</td>
+                    </tr>
+                    <tr class="border-b border-slate-800">
+                        <td class="py-4 px-4 text-slate-300">可解释性</td>
+                        <td class="py-4 px-4 text-slate-400">低<br>权重固定</td>
+                        <td class="py-4 px-4 text-slate-400">低<br>均匀聚合</td>
+                        <td class="py-4 px-4 text-primary-300 font-medium">高<br>可可视化 α_ij</td>
+                    </tr>
+                    <tr>
+                        <td class="py-4 px-4 text-slate-300">归纳能力</td>
+                        <td class="py-4 px-4 text-slate-400">转导式<br>需重新训练</td>
+                        <td class="py-4 px-4 text-slate-400 font-medium">归纳式<br>可泛化新节点</td>
+                        <td class="py-4 px-4 text-primary-300 font-medium">归纳式<br>可泛化新节点</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- Section 7: FAQ / 常见问题 -->
+    <section class="max-w-6xl mx-auto px-4 py-16">
+        <div class="mb-4">
+            <span class="text-primary-400 font-mono text-sm">07 / FAQ</span>
+        </div>
+        <h2 class="text-3xl font-bold mb-8 text-white">常见问题</h2>
+
+        <div class="space-y-4">
+            <details class="glass rounded-xl overflow-hidden group">
+                <summary class="px-6 py-4 cursor-pointer text-slate-200 font-medium flex items-center justify-between hover:bg-slate-800/50 transition-colors">
+                    <span>为什么需要添加自环边 (self-loop)？</span>
+                    <svg class="w-5 h-5 text-slate-500 transform group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </summary>
+                <div class="px-6 pb-4 text-slate-400 text-sm leading-relaxed">
+                    如果不添加自环，节点 i 的聚合结果将完全不包含自身的信息。添加自环边 (i,i) 确保节点自身的特征也参与聚合，这是图神经网络中的标准做法。在 GAT 中，节点 i 对自身的注意力权重 α_ii 也会被学习，通常会比较高。
+                </div>
+            </details>
+            <details class="glass rounded-xl overflow-hidden group">
+                <summary class="px-6 py-4 cursor-pointer text-slate-200 font-medium flex items-center justify-between hover:bg-slate-800/50 transition-colors">
+                    <span>Masked Softmax 和普通的 Softmax 有什么区别？</span>
+                    <svg class="w-5 h-5 text-slate-500 transform group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </summary>
+                <div class="px-6 pb-4 text-slate-400 text-sm leading-relaxed">
+                    普通 Softmax 对所有元素归一化（分母是所有元素之和）。Masked Softmax 只对邻居归一化：非邻居位置设为 -inf，使得 softmax 后非邻居权重为 0。这保证了每个节点只聚合其邻居的信息，符合图的局部性假设。
+                </div>
+            </details>
+            <details class="glass rounded-xl overflow-hidden group">
+                <summary class="px-6 py-4 cursor-pointer text-slate-200 font-medium flex items-center justify-between hover:bg-slate-800/50 transition-colors">
+                    <span>多头注意力 (Multi-head) 的作用是什么？</span>
+                    <svg class="w-5 h-5 text-slate-500 transform group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </summary>
+                <div class="px-6 pb-4 text-slate-400 text-sm leading-relaxed">
+                    类似于 Transformer，多头注意力让模型从多个"视角"学习注意力模式。不同头可能关注不同的特征维度或邻居关系。中间层通常拼接多头结果，最后一层取平均以稳定输出。实验证明多头可以提升模型性能并减少方差。
+                </div>
+            </details>
+            <details class="glass rounded-xl overflow-hidden group">
+                <summary class="px-6 py-4 cursor-pointer text-slate-200 font-medium flex items-center justify-between hover:bg-slate-800/50 transition-colors">
+                    <span>GAT 的参数量是多少？</span>
+                    <svg class="w-5 h-5 text-slate-500 transform group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </summary>
+                <div class="px-6 pb-4 text-slate-400 text-sm leading-relaxed">
+                    单头 GAT 的参数量为：<strong class="text-slate-300">F × F' + 2 × F'</strong>。其中 F×F' 是权重矩阵 W 的参数，2×F' 是注意力向量 a 的参数。K 头注意力的参数量是单头的 K 倍（假设输出维度不变）。相比 GCN，GAT 多了注意力向量 a 的参数量，但总量仍然很小。
+                </div>
+            </details>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="max-w-6xl mx-auto px-4 py-12 text-center text-slate-600 text-sm border-t border-slate-800">
+        <p>参考论文: Veličković et al. "Graph Attention Networks", ICLR 2018</p>
+        <p class="mt-2">交互式 GAT 讲解页面 — 祝学习愉快！</p>
+    </footer>
+
+    <script>
+        // ==================== Data ====================
+        const nodes = [
+            { id: 0, x: 250, y: 80,  features: [1.0, 0.5, 0.2], label: '中心' },
+            { id: 1, x: 130, y: 180, features: [0.3, 1.0, 0.1], label: 'A' },
+            { id: 2, x: 370, y: 180, features: [0.2, 0.4, 1.0], label: 'B' },
+            { id: 3, x: 250, y: 280, features: [0.5, 0.3, 0.8], label: 'C' },
+        ];
+
+        const edges = [
+            [0,1], [0,2], [0,3], [1,2], [1,3], [2,3]
+        ];
+        // Make undirected
+        const allEdges = [];
+        edges.forEach(([u,v]) => { allEdges.push([u,v]); allEdges.push([v,u]); });
+        // Add self-loops
+        for(let i=0;i<4;i++) allEdges.push([i,i]);
+
+        function getNeighbors(i) {
+            return [...new Set(allEdges.filter(([u,v]) => u===i).map(([u,v]) => v))];
+        }
+
+        let selectedNode = 0;
+
+        // ==================== Initialize ====================
+        function init() {
+            renderFeatureTable();
+            renderAdjMatrix();
+            selectNode(0);
+            initDemoParams();
+            renderDemoInputs();
+            computeDemo();
+            highlightStep(0);
+            hljs.highlightAll();
+        }
+
+        // ==================== Graph Visualization ====================
+        function renderFeatureTable() {
+            const tbody = document.getElementById('featureTable');
+            tbody.innerHTML = nodes.map(n => `
+                <tr class="border-t border-slate-800">
+                    <td class="px-2 py-1.5 text-primary-400">${n.id}</td>
+                    <td class="px-2 py-1.5">${n.features[0].toFixed(1)}</td>
+                    <td class="px-2 py-1.5">${n.features[1].toFixed(1)}</td>
+                    <td class="px-2 py-1.5">${n.features[2].toFixed(1)}</td>
+                </tr>
+            `).join('');
+        }
+
+        function renderAdjMatrix() {
+            const adj = Array(4).fill(null).map(() => Array(4).fill(0));
+            allEdges.forEach(([u,v]) => adj[u][v] = 1);
+            const container = document.getElementById('adjMatrix');
+            container.innerHTML = `
+                <div class="inline-grid grid-cols-4 gap-0.5 text-xs font-mono">
+                    ${adj.flat().map((v, i) => `
+                        <div class="w-7 h-7 flex items-center justify-center rounded matrix-cell ${v ? 'bg-primary-900/50 text-primary-400' : 'bg-slate-900/50 text-slate-700'}">
+                            ${v}
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function selectNode(nodeId) {
+            selectedNode = nodeId;
+            document.getElementById('selectedNodeLabel').textContent = nodeId;
+
+            // Reset all nodes
+            nodes.forEach(n => {
+                const circle = document.getElementById(`node${n.id}`);
+                circle.setAttribute('stroke', '#60a5fa');
+                circle.setAttribute('stroke-width', '3');
+                circle.style.filter = '';
+            });
+
+            // Highlight selected
+            const sel = document.getElementById(`node${nodeId}`);
+            sel.setAttribute('stroke', '#f59e0b');
+            sel.setAttribute('stroke-width', '4');
+            sel.style.filter = 'drop-shadow(0 0 8px rgba(245, 158, 11, 0.5))';
+
+            // Compute attention weights for visualization
+            computeAndRenderAttention(nodeId);
+        }
+
+        function computeAndRenderAttention(nodeId) {
+            const neighbors = getNeighbors(nodeId);
+            // Use simple similarity as proxy for attention weights
+            const xi = nodes[nodeId].features;
+            let scores = neighbors.map(j => {
+                const xj = nodes[j].features;
+                const sim = xi.reduce((s, a, k) => s + a * xj[k], 0);
+                return { j, score: sim + 1 }; // bias for visualization
+            });
+
+            const sum = scores.reduce((s, x) => s + x.score, 0);
+            scores = scores.map(s => ({ ...s, alpha: s.score / sum }));
+
+            // Render bars
+            const container = document.getElementById('attentionBars');
+            container.innerHTML = scores.map(({ j, alpha }) => {
+                const pct = (alpha * 100).toFixed(1);
+                const isSelf = j === nodeId;
+                return `
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs w-12 ${isSelf ? 'text-warm-400' : 'text-slate-400'}">节点 ${j}${isSelf?' (自)':''}</span>
+                        <div class="flex-1 h-5 bg-slate-900/50 rounded-full overflow-hidden">
+                            <div class="result-bar h-full rounded-full ${isSelf ? 'bg-warm-500/60' : 'bg-primary-500/60'}" style="width: ${pct}%"></div>
+                        </div>
+                        <span class="text-xs font-mono w-12 text-right text-slate-300">${alpha.toFixed(3)}</span>
+                    </div>
+                `;
+            }).join('');
+
+            // Draw attention arcs in SVG
+            const arcsGroup = document.getElementById('attentionArcs');
+            arcsGroup.innerHTML = '';
+            const ni = nodes[nodeId];
+            scores.forEach(({ j, alpha }) => {
+                if (j === nodeId) return;
+                const nj = nodes[j];
+                // Draw curved line from source to target
+                const mx = (ni.x + nj.x) / 2;
+                const my = (ni.y + nj.y) / 2;
+                const dx = nj.x - ni.x;
+                const dy = nj.y - ni.y;
+                const len = Math.sqrt(dx*dx + dy*dy);
+                const offset = 15;
+                const cx = mx - dy/len * offset;
+                const cy = my + dx/len * offset;
+
+                const opacity = 0.3 + alpha * 0.7;
+                const width = 1 + alpha * 4;
+
+                arcsGroup.innerHTML += `<path d="M${ni.x},${ni.y} Q${cx},${cy} ${nj.x},${nj.y}" fill="none" stroke="#f59e0b" stroke-width="${width}" opacity="${opacity}" class="attention-arc"/>`;
+            });
+        }
+
+        // ==================== Math Steps ====================
+        function highlightStep(idx) {
+            document.querySelectorAll('.step-card').forEach((card, i) => {
+                card.classList.toggle('active', i === idx);
+            });
+        }
+
+        // ==================== Interactive Demo ====================
+        let W = [[0.5, -0.2, 0.3], [0.1, 0.4, -0.1], [-0.3, 0.2, 0.6]];
+        let a_vec = [0.2, -0.1, 0.3, 0.1, -0.2, 0.4];
+        let demoNode = 0;
+
+        function initDemoParams() {
+            randomizeParams();
+        }
+
+        function randomizeParams() {
+            W = W.map(row => row.map(() => (Math.random() * 2 - 1).toFixed(2) * 1));
+            a_vec = a_vec.map(() => (Math.random() * 2 - 1).toFixed(2) * 1);
+            renderDemoInputs();
+            computeDemo();
+        }
+
+        function renderDemoInputs() {
+            const wContainer = document.getElementById('wInputs');
+            wContainer.innerHTML = W.flat().map((v, i) =>
+                `<input type="number" step="0.1" value="${v.toFixed(2)}" class="w-full px-1 py-1 text-xs bg-slate-900 border border-slate-700 rounded text-center font-mono text-slate-300" onchange="updateW(${Math.floor(i/3)}, ${i%3}, this.value)">`
+            ).join('');
+
+            const aContainer = document.getElementById('aInputs');
+            aContainer.innerHTML = a_vec.map((v, i) =>
+                `<input type="number" step="0.1" value="${v.toFixed(2)}" class="w-full px-1 py-1 text-xs bg-slate-900 border border-slate-700 rounded text-center font-mono text-slate-300" onchange="updateA(${i}, this.value)">`
+            ).join('');
+        }
+
+        function updateW(r, c, val) {
+            W[r][c] = parseFloat(val) || 0;
+            computeDemo();
+        }
+
+        function updateA(i, val) {
+            a_vec[i] = parseFloat(val) || 0;
+            computeDemo();
+        }
+
+        function setDemoNode(n) {
+            demoNode = n;
+            document.getElementById('demoNodeLabel').textContent = n;
+            document.querySelectorAll('.demo-node-btn').forEach(btn => {
+                btn.classList.toggle('border-primary-500', parseInt(btn.dataset.n) === n);
+                btn.classList.toggle('text-primary-400', parseInt(btn.dataset.n) === n);
+            });
+            computeDemo();
+        }
+
+        function matVecMul(M, v) {
+            return M.map(row => row.reduce((sum, a, i) => sum + a * v[i], 0));
+        }
+
+        function leakyReLU(x, slope=0.2) {
+            return x > 0 ? x : slope * x;
+        }
+
+        function computeDemo() {
+            const xi = nodes[demoNode].features;
+            const neighbors = getNeighbors(demoNode);
+
+            // Step 1: Wh for all nodes
+            const Wh_all = nodes.map(n => matVecMul(W, n.features));
+            document.getElementById('step1Result').innerHTML = neighbors.map(j => {
+                const wh = Wh_all[j].map(v => v.toFixed(3));
+                const label = j === demoNode ? `<span class="text-warm-400">节点 ${j} (自身)</span>` : `节点 ${j}`;
+                return `<div>${label}: Wh = [${wh.join(', ')}]</div>`;
+            }).join('');
+
+            // Step 2: Attention scores
+            const Wh_i = Wh_all[demoNode];
+            let scores = neighbors.map(j => {
+                const Wh_j = Wh_all[j];
+                const concat = [...Wh_i, ...Wh_j];
+                const e = leakyReLU(concat.reduce((s, v, idx) => s + v * a_vec[idx], 0));
+                return { j, e };
+            });
+            document.getElementById('step2Result').innerHTML = scores.map(({j, e}) => {
+                const Wh_j = Wh_all[j];
+                const concat = [...Wh_i, ...Wh_j];
+                return `<div>节点 ${j}: e = LeakyReLU(${concat.map((v,i) => `(${v.toFixed(2)}×${a_vec[i].toFixed(2)})`).join(' + ')}) = <span class="text-primary-400">${e.toFixed(4)}</span></div>`;
+            }).join('');
+
+            // Step 3: Softmax
+            const maxE = Math.max(...scores.map(s => s.e));
+            const expScores = scores.map(s => ({ ...s, expE: Math.exp(s.e - maxE) }));
+            const sumExp = expScores.reduce((s, x) => s + x.expE, 0);
+            const alphas = expScores.map(s => ({ ...s, alpha: s.expE / sumExp }));
+
+            document.getElementById('step3Result').innerHTML = alphas.map(({j, e, expE, alpha}) => {
+                return `<div>节点 ${j}: α = exp(${e.toFixed(4)}) / ${sumExp.toFixed(4)} = <span class="text-primary-400 font-bold">${alpha.toFixed(4)}</span></div>`;
+            }).join('') + `<div class="mt-2 text-xs text-slate-500">验证: 权重之和 = ${alphas.reduce((s,a) => s+a.alpha, 0).toFixed(4)}</div>`;
+
+            // Step 4: Aggregation
+            const out = [0, 0, 0];
+            alphas.forEach(({j, alpha}) => {
+                Wh_all[j].forEach((v, idx) => { out[idx] += alpha * v; });
+            });
+            // ELU
+            const eluOut = out.map(v => v > 0 ? v : (Math.exp(v) - 1));
+
+            document.getElementById('step4Result').innerHTML = `
+                <div>h' = ${alphas.map(({j, alpha}) => `${alpha.toFixed(4)}×Wh_${j}`).join(' + ')}</div>
+                <div>h' = [${out.map(v => v.toFixed(4)).join(', ')}]</div>
+                <div>h' = ELU([${out.map(v => v.toFixed(4)).join(', ')}]) = <span class="text-primary-400 font-bold text-base">[${eluOut.map(v => v.toFixed(4)).join(', ')}]</span></div>
+            `;
+        }
+
+        // ==================== Tab Switching ====================
+        function switchTab(tab, btn) {
+            document.querySelectorAll('.code-section').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`code-${tab}`).classList.remove('hidden');
+            document.querySelectorAll('.tab-btn').forEach(b => {
+                b.classList.remove('active', 'text-slate-200');
+                b.classList.add('text-slate-400');
+            });
+            btn.classList.add('active', 'text-slate-200');
+            btn.classList.remove('text-slate-400');
+        }
+
+        // ==================== Scroll Indicator ====================
+        window.addEventListener('scroll', () => {
+            const scrollTop = document.documentElement.scrollTop || document.body.scrollTop;
+            const scrollHeight = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+            const progress = (scrollTop / scrollHeight) * 100;
+            document.getElementById('scrollBar').style.width = progress + '%';
+        });
+
+        // ==================== Initialize ====================
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
